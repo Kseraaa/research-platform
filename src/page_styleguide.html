@@ -1,1 +1,302 @@
-<!-- page_styleguide.html: รวมทุก component (เฟส 0.5) -->
+<!-- page_styleguide.html: รวมทุก component ในทุกสถานะ (route styleguide: admin หรือเจ้าของสคริปต์ที่เปิด /dev) -->
+<template id="tpl-styleguide">
+  <section class="bg-navy-800 text-white">
+    <div class="container-content py-10">
+      <p class="label-gold text-gold-400">สำหรับผู้พัฒนา</p>
+      <h1 class="heading-1">Styleguide</h1>
+      <p class="mt-2 text-navy-100">component ทั้งหมดที่ใช้ได้ในทุกหน้า ย่อจอให้เหลือ 375px เพื่อตรวจบนมือถือ</p>
+    </div>
+  </section>
+
+  <div class="container-content flex flex-col gap-12 py-12">
+
+    <section aria-labelledby="sg-colors">
+      <h2 id="sg-colors" class="heading-2">สี</h2>
+      <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6" data-sg="colors"></div>
+      <p class="mt-3 text-meta">ห้ามใช้ gold-500 เป็นตัวอักษรบนพื้นขาว (ใช้ gold-700) · ink-subtle ใช้บนพื้นขาวเท่านั้น · ขอบช่องฟอร์มใช้ ink-subtle</p>
+    </section>
+
+    <section aria-labelledby="sg-type">
+      <h2 id="sg-type" class="heading-2">ตัวอักษร</h2>
+      <div class="card mt-4 flex flex-col gap-4 p-6">
+        <p class="heading-1">H1 ศูนย์รวมงานวิจัยชั้นเรียน</p>
+        <p class="heading-2">H2 หัวข้อส่วนของหน้า</p>
+        <p class="heading-3">H3 หัวการ์ด</p>
+        <p class="text-body">เนื้อหา 16px line-height 1.7 อ่านภาษาไทยสบาย ข้อความยาวพอที่จะเห็นการขึ้นบรรทัดใหม่ของประโยคภาษาไทยบนจอมือถือ</p>
+        <p class="text-meta">คำอธิบาย / เมตาดาต้า 14px</p>
+        <p class="text-label">ป้ายกำกับ 13px</p>
+        <p class="label-gold">ป้ายกำกับสีทองบนพื้นขาว</p>
+        <p><a href="#" class="link">ลิงก์ในเนื้อหา</a></p>
+      </div>
+    </section>
+
+    <section aria-labelledby="sg-buttons">
+      <h2 id="sg-buttons" class="heading-2">ปุ่ม</h2>
+      <div class="card mt-4 flex flex-col gap-6 p-6">
+        <div class="flex flex-wrap gap-3">
+          <button type="button" class="btn-primary">ปุ่มหลัก</button>
+          <button type="button" class="btn-secondary">ปุ่มรอง</button>
+          <button type="button" class="btn-ghost">ปุ่มข้อความ</button>
+          <button type="button" class="btn-danger">ลบ</button>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <button type="button" class="btn-primary btn-lg">ขนาดใหญ่</button>
+          <button type="button" class="btn-secondary btn-lg">ขนาดใหญ่</button>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <button type="button" class="btn-primary" disabled>ปิดใช้งาน</button>
+          <button type="button" class="btn-secondary" disabled>ปิดใช้งาน</button>
+          <button type="button" class="btn-primary" data-sg="loading-btn">กดเพื่อดูสถานะกำลังส่ง</button>
+        </div>
+        <div class="flex flex-wrap gap-3 rounded-md bg-navy-800 p-4">
+          <button type="button" class="btn-primary">บนพื้นกรมท่า</button>
+          <button type="button" class="btn-on-dark">ปุ่มบนพื้นกรมท่า</button>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="sg-badges">
+      <h2 id="sg-badges" class="heading-2">ป้ายสถานะ</h2>
+      <div class="card mt-4 flex flex-wrap gap-2 p-6" data-sg="badges"></div>
+    </section>
+
+    <section aria-labelledby="sg-alerts">
+      <h2 id="sg-alerts" class="heading-2">Alert และ Toast</h2>
+      <div class="mt-4 flex flex-col gap-3" data-sg="alerts"></div>
+      <div class="mt-4 flex flex-wrap gap-3">
+        <button type="button" class="btn-secondary" data-sg-toast="success">Toast สำเร็จ</button>
+        <button type="button" class="btn-secondary" data-sg-toast="danger">Toast ผิดพลาด</button>
+        <button type="button" class="btn-secondary" data-sg-toast="info">Toast แจ้งข้อมูล</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="sg-form">
+      <h2 id="sg-form" class="heading-2">ฟอร์ม</h2>
+      <div class="card mt-4 grid gap-6 p-6 md:grid-cols-2" data-sg="fields"></div>
+    </section>
+
+    <section aria-labelledby="sg-choice">
+      <h2 id="sg-choice" class="heading-2">Radio card และ ใช่/ไม่ใช่</h2>
+      <div class="card mt-4 flex flex-col gap-6 p-6">
+        <fieldset class="field">
+          <legend class="field-label mb-1">รูปแบบการนำเสนอ <span class="field-required" aria-hidden="true">*</span></legend>
+          <div class="choice-group" data-sg="radio-cards"></div>
+        </fieldset>
+        <div data-sg="yes-no"></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="sg-dropzone">
+      <h2 id="sg-dropzone" class="heading-2">อัปโหลดไฟล์</h2>
+      <p class="mt-1 text-meta">ช่องแรกใช้งานได้จริง (ลองไฟล์ผิดชนิดหรือใหญ่เกิน) ช่องอื่นแสดงแต่ละสถานะ</p>
+      <div class="mt-4 grid gap-4 md:grid-cols-2" data-sg="dropzones"></div>
+    </section>
+
+    <section aria-labelledby="sg-stepper">
+      <h2 id="sg-stepper" class="heading-2">Stepper</h2>
+      <div class="card mt-4 flex flex-col gap-4 p-6" data-sg="stepper"></div>
+    </section>
+
+    <section aria-labelledby="sg-timeline">
+      <h2 id="sg-timeline" class="heading-2">Timeline</h2>
+      <div class="card mt-4 p-6" data-sg="timeline"></div>
+    </section>
+
+    <section aria-labelledby="sg-states">
+      <h2 id="sg-states" class="heading-2">สถานะโหลด ว่าง และผิดพลาด</h2>
+      <div class="mt-4 flex flex-col gap-6" data-sg="states"></div>
+    </section>
+
+    <section aria-labelledby="sg-table">
+      <h2 id="sg-table" class="heading-2">ตาราง (แอดมิน)</h2>
+      <p class="mt-1 text-meta">จอเล็กกว่า 768px แสดงเป็นการ์ด</p>
+      <div class="mt-4" data-sg="table"></div>
+    </section>
+
+    <section aria-labelledby="sg-cards">
+      <h2 id="sg-cards" class="heading-2">การ์ดเอกสารและวิดีโอ</h2>
+      <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-sg="doc-cards"></div>
+      <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-sg="video-cards"></div>
+    </section>
+
+    <section aria-labelledby="sg-nav">
+      <h2 id="sg-nav" class="heading-2">แท็บและการแบ่งหน้า</h2>
+      <div class="card mt-4 flex flex-col gap-6 p-6">
+        <div data-sg="tabs"></div>
+        <p class="text-meta" data-sg="tabs-output"></p>
+        <div data-sg="pagination"></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="sg-modal">
+      <h2 id="sg-modal" class="heading-2">Modal</h2>
+      <div class="mt-4 flex flex-wrap gap-3">
+        <button type="button" class="btn-secondary" data-sg="modal">เปิด modal</button>
+        <button type="button" class="btn-danger" data-sg="confirm">ยืนยันการลบ</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="sg-image">
+      <h2 id="sg-image" class="heading-2">ภาพระหว่างพัฒนา</h2>
+      <div class="image-placeholder mt-4 aspect-video max-w-md rounded-card">ภาพกิจกรรม</div>
+    </section>
+  </div>
+</template>
+
+<script>
+  registerPage('styleguide', {
+    render(container) {
+      container.appendChild(cloneTemplate('tpl-styleguide'));
+      const slot = name => container.querySelector('[data-sg="' + name + '"]');
+
+      // สี
+      const swatches = [
+        ['bg-navy-800', 'navy-800'], ['bg-navy-700', 'navy-700'], ['bg-navy-500', 'navy-500'], ['bg-navy-200', 'navy-200'],
+        ['bg-navy-100', 'navy-100'], ['bg-navy-50', 'navy-50'], ['bg-gold-700', 'gold-700'], ['bg-gold-500', 'gold-500'],
+        ['bg-gold-400', 'gold-400'], ['bg-gold-100', 'gold-100'], ['bg-gold-50', 'gold-50'], ['bg-ink', 'ink'],
+        ['bg-ink-muted', 'ink-muted'], ['bg-ink-subtle', 'ink-subtle'], ['bg-line', 'line'], ['bg-surface-alt', 'surface-alt'],
+        ['bg-success-bg', 'success-bg'], ['bg-success-fg', 'success-fg'], ['bg-warning-bg', 'warning-bg'], ['bg-warning-fg', 'warning-fg'],
+        ['bg-danger-bg', 'danger-bg'], ['bg-danger-fg', 'danger-fg'], ['bg-info-bg', 'info-bg'], ['bg-info-fg', 'info-fg']
+      ];
+      slot('colors').innerHTML = swatches.map(([cls, name]) =>
+        '<div class="card overflow-hidden"><div class="h-14 ' + cls + '"></div><p class="px-3 py-2 text-[13px] font-medium">' + name + '</p></div>'
+      ).join('');
+
+      // ปุ่ม loading
+      const loadingBtn = slot('loading-btn');
+      loadingBtn.addEventListener('click', () => {
+        setButtonLoading(loadingBtn, true);
+        setTimeout(() => setButtonLoading(loadingBtn, false), 2000);
+      });
+
+      // ป้ายสถานะ
+      slot('badges').innerHTML = Object.keys(appConfig.statusLabels || STATUS_BADGE_VARIANTS).map(renderStatusBadge).join('');
+
+      // alert + toast
+      slot('alerts').innerHTML =
+        renderAlert('info', 'ระบบจะปิดรับลงทะเบียนวันที่ 15 พ.ย. 2569') +
+        renderAlert('success', 'ส่งงานเรียบร้อยแล้ว รหัสงาน SUB-2026-0001', 'สำเร็จ') +
+        renderAlert('warning', 'ผู้ตรวจขอให้แก้ไขบทคัดย่อให้สั้นลง', 'ขอให้แก้ไข') +
+        renderAlert('danger', 'อัปโหลดไฟล์ไม่สำเร็จ กรุณาลองใหม่');
+      container.querySelectorAll('[data-sg-toast]').forEach(btn => {
+        btn.addEventListener('click', () => toast({ success: 'บันทึกเรียบร้อยแล้ว', danger: 'เกิดข้อผิดพลาด กรุณาลองใหม่', info: 'มีข่าวประชาสัมพันธ์ใหม่' }[btn.dataset.sgToast], btn.dataset.sgToast));
+      });
+
+      // ฟอร์ม
+      slot('fields').innerHTML =
+        renderField({ id: 'sg-name', label: 'ชื่อ-นามสกุล', required: true, autocomplete: 'name' }) +
+        renderField({ id: 'sg-email', label: 'อีเมล', type: 'email', required: true, help: 'เราจะส่งลิงก์ติดตามสถานะไปที่อีเมลนี้', autocomplete: 'email' }) +
+        renderField({ id: 'sg-phone', label: 'เบอร์โทร', type: 'tel', inputmode: 'tel', value: '08x' }) +
+        renderField({ id: 'sg-disabled', label: 'ปีการศึกษา', value: '2569', disabled: true }) +
+        '<div class="md:col-span-2">' + renderField({ id: 'sg-abstract', label: 'บทคัดย่อสั้น', multiline: true, help: 'ไม่เกิน 1,500 ตัวอักษร', maxlength: 1500 }) + '</div>' +
+        '<label class="flex items-start gap-3 md:col-span-2"><input type="checkbox" class="checkbox mt-1">' +
+          '<span>ข้าพเจ้ายินยอมให้เก็บข้อมูลส่วนบุคคลตาม <a href="#" class="link">ประกาศความเป็นส่วนตัว</a> <span class="field-required" aria-hidden="true">*</span></span></label>';
+      setFieldError(container.querySelector('#sg-phone'), 'กรุณากรอกเบอร์โทร 9-10 หลัก');
+
+      // radio card + ใช่/ไม่ใช่
+      const kinds = appConfig.fileKinds || {};
+      const files = type => ((appConfig.requiredFiles || {})[type] || []).map(k => (kinds[k] || {}).label || k);
+      slot('radio-cards').innerHTML =
+        renderRadioCard({ name: 'sg-format', value: 'oral', title: 'Oral (นำเสนอปากเปล่า)', description: 'ไฟล์ที่ต้องส่ง', items: files('oral'), required: true }) +
+        renderRadioCard({ name: 'sg-format', value: 'poster', title: 'Poster', description: 'ไฟล์ที่ต้องส่ง', items: files('poster'), required: true });
+      slot('yes-no').innerHTML = renderYesNo({
+        name: 'sg-publish', legend: 'อนุญาตให้เผยแพร่ในคลังงานวิจัยของโรงเรียน', required: true,
+        help: 'ต้องเลือกเอง ไม่มีค่าเริ่มต้น', yesLabel: 'อนุญาต', noLabel: 'ไม่อนุญาต'
+      });
+
+      // dropzone
+      const dzSlot = slot('dropzones');
+      const sample = (name, type, kb) => new File([new Uint8Array(kb * 1024)], name, { type: type });
+      const live = createDropzone({ fileKind: 'paper_pdf', required: true, onChange: f => f && toast('เลือกไฟล์ ' + f.name, 'info') });
+      const selected = createDropzone({ fileKind: 'paper_docx', required: true });
+      selected.setFile(sample('paper_v1.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 820));
+      const uploading = createDropzone({ fileKind: 'abstract_pdf' });
+      uploading.setFile(sample('abstract.pdf', 'application/pdf', 350));
+      uploading.setUploading(45);
+      const success = createDropzone({ fileKind: 'poster_pdf' });
+      success.setFile(sample('poster.pdf', 'application/pdf', 2400));
+      success.setSuccess();
+      const failed = createDropzone({ fileKind: 'research_pdf', onRetry: () => {
+        let pct = 0;
+        const timer = setInterval(() => {
+          pct += 20;
+          if (pct >= 100) { clearInterval(timer); failed.setSuccess(); } else failed.setUploading(pct);
+        }, 300);
+      } });
+      failed.setFile(sample('research.pdf', 'application/pdf', 1200));
+      failed.setError('เชื่อมต่อขาดหาย อัปโหลดไม่สำเร็จ');
+      [live, selected, uploading, success, failed].forEach(dz => dzSlot.appendChild(dz.element));
+
+      // stepper
+      const steps = ['ข้อมูลผู้สมัคร', 'ผลงาน', 'อัปโหลดไฟล์', 'ตรวจสอบและส่ง'];
+      slot('stepper').innerHTML = renderStepper(steps, 1) + renderStepper(steps, 3);
+
+      // timeline (วันที่อิงวันนี้)
+      const day = offset => new Date(Date.now() + offset * 86400000).toISOString();
+      slot('timeline').innerHTML = renderTimeline([
+        { title: 'เปิดรับลงทะเบียน', start_date: day(-20), end_date: day(-10) },
+        { title: 'ส่งไฟล์ฉบับแก้ไข', start_date: day(-2), end_date: day(5), detail: 'เฉพาะผลงานที่ได้รับแจ้งให้แก้ไข' },
+        { title: 'ประกาศรายชื่อผู้นำเสนอ', start_date: day(12) },
+        { title: 'วันนำเสนอผลงาน', start_date: day(30), detail: 'ห้องประชุมใหญ่ โรงเรียน มอ.วิทยานุสรณ์' }
+      ]);
+
+      // loading / empty / error
+      const states = slot('states');
+      states.innerHTML = renderSkeleton('cards', 3) + renderSkeleton('table', 3) +
+        renderEmptyState({ icon: 'search-x', title: 'ไม่พบเอกสารที่ค้นหา', message: 'ลองเปลี่ยนคำค้นหรือล้างตัวกรอง', actionLabel: 'ดูเอกสารทั้งหมด', actionRoute: 'documents' });
+      states.appendChild(createErrorState('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่', () => toast('กำลังลองใหม่...', 'info')));
+
+      // ตาราง
+      slot('table').innerHTML = renderDataTable({
+        caption: 'งานที่ส่ง',
+        columns: [
+          { key: 'submission_id', label: 'รหัสงาน' },
+          { key: 'title', label: 'ชื่อเรื่อง' },
+          { key: 'type', label: 'ประเภท' },
+          { key: 'submitted_at', label: 'วันที่ส่ง', html: row => escapeHtml(formatThaiDate(row.submitted_at)) },
+          { key: 'status', label: 'สถานะ', html: row => renderStatusBadge(row.status) }
+        ],
+        rows: [
+          { submission_id: 'SUB-2026-0001', title: 'การพัฒนาทักษะการอ่านจับใจความด้วยบทเรียนออนไลน์', type: 'Oral', submitted_at: day(-5), status: 'under_review' },
+          { submission_id: 'SUB-2026-0002', title: 'ผลของกิจกรรมสะเต็มต่อความคิดสร้างสรรค์', type: 'Poster', submitted_at: day(-3), status: 'revision_requested' },
+          { submission_id: 'SUB-2026-0003', title: 'การใช้เกมการศึกษาในวิชาคณิตศาสตร์', type: 'ครู', submitted_at: day(-1), status: 'recorded' }
+        ]
+      });
+
+      // การ์ดเอกสาร + วิดีโอ
+      slot('doc-cards').innerHTML = [
+        { title: 'แบบฟอร์มคำขอทุนวิจัยในชั้นเรียน ปีการศึกษา 2569', author: 'ฝ่ายส่งเสริมงานวิจัย', academic_year: 2569, file_type: 'docx', size_kb: 84, drive_file_id: 'sample' },
+        { title: 'คู่มือการใช้งานระบบส่งงานวิจัย', author: 'หน่วยส่งเสริมงานวิจัย', academic_year: 2569, file_type: 'pdf', size_kb: 2300, drive_file_id: 'sample' },
+        { title: 'เทมเพลตสไลด์นำเสนอผลงานแบบ Oral', author: 'หน่วยส่งเสริมงานวิจัย', academic_year: 2569, file_type: 'pptx', size_kb: 5100, drive_file_id: 'sample' },
+        { title: 'ตารางบันทึกคะแนนประเมินผลงาน', author: 'ฝ่ายวิชาการ', academic_year: 2568, file_type: 'xlsx', size_kb: 40, drive_file_id: 'sample' }
+      ].map(renderDocumentCard).join('');
+      slot('video-cards').innerHTML = [
+        { youtube_id: 'M7lc1UVf-VE', title: 'การเขียนบทคัดย่องานวิจัยในชั้นเรียน', description: 'ตัวอย่างวิดีโอ (กดเล่นเพื่อโหลด iframe)' },
+        { youtube_id: 'invalid', title: 'วิดีโอที่ id ไม่ถูกต้อง', description: 'ปุ่มเล่นจะไม่ทำงาน' }
+      ].map(renderVideoCard).join('');
+
+      // แท็บ + pagination
+      const tabsOutput = slot('tabs-output');
+      const categories = [{ id: 'all', label: 'ทั้งหมด' }, { id: 'research', label: 'การทำวิจัย' }, { id: 'teaching', label: 'เทคนิคการสอน' }, { id: 'tech', label: 'เทคโนโลยีการศึกษา' }];
+      slot('tabs').appendChild(createTabs({ label: 'หมวดหมู่วิดีโอ', items: categories, selected: 'all', onChange: id => { tabsOutput.textContent = 'เลือกหมวด: ' + id; } }));
+      const pagerSlot = slot('pagination');
+      const renderPager = page => {
+        pagerSlot.innerHTML = '';
+        pagerSlot.appendChild(createPagination({ page: page, totalPages: 9, onChange: renderPager }));
+        refreshIcons();
+      };
+      renderPager(5);
+
+      // modal
+      slot('modal').addEventListener('click', () => modal({
+        title: 'ตัวอย่าง modal',
+        content: 'กด Esc, กดพื้นหลัง หรือปุ่มปิด เพื่อปิด focus วนอยู่ใน modal',
+        actions: [{ label: 'ปิด', variant: 'secondary' }, { label: 'ตกลง', variant: 'primary', onClick: close => { close(); toast('กดตกลงแล้ว', 'success'); } }]
+      }));
+      slot('confirm').addEventListener('click', () => {
+        confirmDialog({ title: 'ลบเอกสารนี้?', message: 'เอกสารจะถูกซ่อนจากหน้าเว็บ', confirmLabel: 'ลบ', danger: true })
+          .then(ok => toast(ok ? 'ลบแล้ว' : 'ยกเลิกแล้ว', ok ? 'success' : 'info'));
+      });
+    }
+  });
+</script>

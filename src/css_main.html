@@ -1,4 +1,4 @@
-<!-- css_main.html: Tailwind CDN + design tokens ตาม docs/DESIGN.md ข้อ 2 + style พื้นฐาน (class component เพิ่มในเฟส 0.5) -->
+<!-- css_main.html: Tailwind CDN + design tokens ตาม docs/DESIGN.md ข้อ 2 + class component กลาง (ดูตัวอย่างทั้งหมดใน page_styleguide.html) -->
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <script>
   tailwind.config = {
@@ -33,5 +33,132 @@
     h1, h2, h3 { text-wrap: balance; }
     :focus-visible { @apply outline outline-2 outline-offset-2 outline-navy-500; }
     .bg-navy-800 :focus-visible { @apply outline-gold-400; }
+    [hidden] { display: none !important; }
+    [id] { scroll-margin-top: 80px; } /* ไม่ให้ header ที่ติดด้านบนบังหัวข้อ */
+  }
+
+  @layer components {
+    /* ---------- layout + typography ---------- */
+    .container-content { @apply mx-auto max-w-content px-4 md:px-6; }
+    .section { @apply py-12 md:py-20; }
+    .heading-1 { @apply font-heading text-3xl md:text-5xl font-bold leading-tight; }
+    .heading-2 { @apply font-heading text-2xl md:text-3xl font-bold; }
+    .heading-3 { @apply font-sans text-lg font-semibold; }
+    .text-body { @apply text-base leading-[1.7]; }
+    .text-meta { @apply text-sm text-ink-muted; }
+    .text-label { @apply text-[13px] font-medium; }
+    .label-gold { @apply text-[13px] font-medium text-gold-700; }
+    .link { @apply text-navy-500 underline underline-offset-2 hover:text-navy-700; }
+
+    /* ---------- button ---------- */
+    .btn {
+      @apply inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-md font-semibold
+             transition-colors select-none disabled:cursor-not-allowed disabled:opacity-60;
+    }
+    .btn-lg { @apply min-h-[52px] px-6 text-lg; }
+    .btn-primary { @apply btn bg-gold-500 text-navy-900 hover:bg-gold-400 disabled:hover:bg-gold-500; }
+    .btn-secondary { @apply btn border border-navy-500 bg-surface text-navy-500 hover:bg-navy-50 disabled:hover:bg-surface; }
+    .btn-ghost { @apply btn text-navy-500 hover:bg-navy-50 disabled:hover:bg-transparent; }
+    .btn-danger { @apply btn bg-danger-fg text-white hover:bg-danger-fg/90 disabled:hover:bg-danger-fg; }
+    .btn-on-dark { @apply btn text-navy-100 hover:bg-navy-700 hover:text-white; }
+    .btn-icon { @apply min-w-[44px] px-0; }
+    .spinner { @apply inline-block h-4 w-4 rounded-full border-2 border-current border-r-transparent animate-spin; }
+
+    /* ---------- card ---------- */
+    .card { @apply bg-surface border border-line rounded-card; }
+    .card-hover { @apply transition-shadow hover:shadow-md; }
+
+    /* ---------- form field ---------- */
+    .field { @apply flex flex-col gap-1; }
+    .field-label { @apply font-medium text-ink; }
+    .field-required { @apply text-danger-fg; }
+    .field-input {
+      @apply w-full min-h-[44px] rounded-md border border-ink-subtle bg-surface px-3 py-2 text-base text-ink
+             placeholder:text-ink-subtle focus:border-navy-500 disabled:bg-surface-alt disabled:text-ink-muted;
+    }
+    .field-input[aria-invalid="true"] { @apply border-danger-fg; }
+    textarea.field-input { @apply min-h-[120px]; }
+    .field-help { @apply text-sm text-ink-muted; }
+    .field-error { @apply flex items-start gap-1 text-sm text-danger-fg; }
+    .checkbox { @apply h-5 w-5 shrink-0 rounded border-ink-subtle accent-navy-500; }
+
+    /* ---------- radio card + yes/no ---------- */
+    .radio-card {
+      @apply card relative flex cursor-pointer gap-3 p-4 transition-colors hover:border-navy-200
+             has-[:checked]:border-navy-500 has-[:checked]:bg-navy-50 has-[:checked]:ring-1 has-[:checked]:ring-navy-500
+             has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-navy-500;
+    }
+    .radio-card input { @apply mt-1 h-5 w-5 shrink-0 accent-navy-500; }
+    .choice-group { @apply grid gap-3 sm:grid-cols-2; }
+
+    /* ---------- badge + alert ---------- */
+    .badge { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[13px] font-medium whitespace-nowrap; }
+    .badge-info { @apply badge bg-info-bg text-info-fg; }
+    .badge-success { @apply badge bg-success-bg text-success-fg; }
+    .badge-warning { @apply badge bg-warning-bg text-warning-fg; }
+    .badge-danger { @apply badge bg-danger-bg text-danger-fg; }
+    .badge-neutral { @apply badge bg-surface-alt text-ink-muted border border-line; }
+    .alert { @apply flex items-start gap-3 rounded-md p-4; }
+    .alert-info { @apply alert bg-info-bg text-info-fg; }
+    .alert-success { @apply alert bg-success-bg text-success-fg; }
+    .alert-warning { @apply alert bg-warning-bg text-warning-fg; }
+    .alert-danger { @apply alert bg-danger-bg text-danger-fg; }
+
+    /* ---------- dropzone + progress ---------- */
+    .dropzone { @apply rounded-card border-2 border-dashed border-ink-subtle bg-surface p-4 transition-colors; }
+    .dropzone[data-dragover="true"] { @apply border-navy-500 bg-navy-50; }
+    .dropzone[data-state="success"] { @apply border-solid border-success-fg bg-success-bg; }
+    .dropzone[data-state="error"] { @apply border-solid border-danger-fg bg-danger-bg; }
+    .progress { @apply h-2 w-full overflow-hidden rounded-full bg-line; }
+    .progress-bar { @apply h-full rounded-full bg-navy-500 transition-[width]; }
+
+    /* ---------- stepper ---------- */
+    .step-dot { @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold; }
+    .step-dot-done { @apply step-dot border-navy-500 bg-navy-500 text-white; }
+    .step-dot-current { @apply step-dot border-gold-500 bg-gold-500 text-navy-900; }
+    .step-dot-todo { @apply step-dot border-ink-subtle bg-surface text-ink-muted; }
+
+    /* ---------- timeline ---------- */
+    .timeline { @apply relative ml-3 border-l-2 border-line; }
+    .timeline-item { @apply relative pb-6 pl-6 last:pb-0; }
+    .timeline-dot { @apply absolute -left-[9px] top-1.5 h-4 w-4 rounded-full border-2 border-surface bg-navy-200; }
+    .timeline-item[data-state="past"] { @apply opacity-60; }
+    .timeline-item[data-state="current"] .timeline-dot { @apply bg-gold-500 ring-4 ring-gold-100; }
+    .timeline-item[data-state="upcoming"] .timeline-dot { @apply bg-navy-500; }
+
+    /* ---------- skeleton ---------- */
+    .skeleton { @apply animate-pulse rounded-md bg-line; }
+
+    /* ---------- table (แอดมิน): มือถือแสดงเป็นการ์ด ---------- */
+    .data-table { @apply w-full border-collapse text-left; }
+    .data-table th { @apply sticky top-0 z-10 bg-surface-alt px-4 py-3 text-sm font-semibold text-ink-muted border-b border-line; }
+    .data-table td { @apply px-4 py-3 border-b border-line align-top; }
+    .data-table tbody tr { @apply hover:bg-surface-alt; }
+    @media (max-width: 767px) {
+      .data-table thead { @apply sr-only; }
+      .data-table, .data-table tbody, .data-table tr, .data-table td { @apply block; }
+      .data-table tr { @apply card mb-3 p-3; }
+      .data-table td { @apply flex gap-3 border-0 px-0 py-1; }
+      .data-table td::before { content: attr(data-label); @apply w-28 shrink-0 text-sm font-medium text-ink-muted; }
+    }
+
+    /* ---------- file type label (document card) ---------- */
+    .filetype { @apply inline-flex items-center rounded px-2 py-0.5 text-[13px] font-semibold uppercase; }
+    .filetype-pdf { @apply filetype bg-danger-bg text-danger-fg; }
+    .filetype-docx { @apply filetype bg-info-bg text-info-fg; }
+    .filetype-pptx { @apply filetype bg-warning-bg text-warning-fg; }
+    .filetype-xlsx { @apply filetype bg-success-bg text-success-fg; }
+
+    /* ---------- pagination ---------- */
+    .page-btn { @apply btn btn-icon border border-line bg-surface font-medium text-ink hover:bg-navy-50; }
+    .page-btn[aria-current="page"] { @apply border-navy-500 bg-navy-500 text-white hover:bg-navy-500; }
+
+    /* ---------- tabs (หมวดหมู่วิดีโอ, แท็บหน้าครู) ---------- */
+    .tab-list { @apply flex gap-2 overflow-x-auto pb-1; }
+    .tab { @apply btn whitespace-nowrap rounded-full border border-line bg-surface font-medium text-ink-muted hover:text-navy-500; }
+    .tab[aria-selected="true"] { @apply border-navy-500 bg-navy-500 text-white hover:text-white; }
+
+    /* ---------- placeholder ภาพ (ระหว่างพัฒนา) ---------- */
+    .image-placeholder { @apply flex items-center justify-center bg-line text-sm text-ink-muted; }
   }
 </style>

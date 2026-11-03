@@ -18,11 +18,11 @@
 
 ## เฟส 0.5: Design system + Styleguide
 
-- [ ] `css_main.html`: `tailwind.config` ตาม token ใน `docs/DESIGN.md` ข้อ 2 + class component (`.btn-primary`, `.btn-secondary`, `.card`, `.field`, `.badge-*` ฯลฯ)
-- [ ] `index.html`: header (เมนูตาม DESIGN.md ข้อ 5, ปุ่มทอง "ลงทะเบียนนำเสนอ", hamburger บนมือถือ) + footer + กรอบเนื้อหา `max-w-content`
-- [ ] `js_ui.html`: `toast()`, `modal()`, `renderStatusBadge()`, `createDropzone()`, `renderPagination()`, `renderSkeleton()`, `renderEmptyState()`
-- [ ] `page_styleguide.html`: แสดงทุก component ในทุกสถานะ (ปกติ, hover, disabled, loading, error, empty) ทั้งบนจอกว้างและมือถือ
-- [ ] ตรวจสีตัดกันตาม WCAG AA
+- [x] `css_main.html`: `tailwind.config` ตาม token ใน `docs/DESIGN.md` ข้อ 2 + class component (`.btn-primary`, `.btn-secondary`, `.card`, `.field`, `.badge-*` ฯลฯ)
+- [x] `index.html`: header (เมนูตาม DESIGN.md ข้อ 5, ปุ่มทอง "ลงทะเบียนนำเสนอ", hamburger บนมือถือ) + footer + กรอบเนื้อหา `max-w-content`
+- [x] `js_ui.html`: `toast()`, `modal()`, `renderStatusBadge()`, `createDropzone()`, `createPagination()`, `renderSkeleton()`, `renderEmptyState()`
+- [x] `page_styleguide.html`: แสดงทุก component ในทุกสถานะ (ปกติ, hover, disabled, loading, error, empty) ทั้งบนจอกว้างและมือถือ
+- [x] ตรวจสีตัดกันตาม WCAG AA
 
 > **Prompt:** อ่าน docs/DESIGN.md แล้วทำเฟส 0.5 ใน docs/TASKS.md สร้าง styleguide ให้ครบทุก component ในข้อ 3 ยังไม่ต้องทำหน้าจริง เสร็จแล้วบอก URL ที่ฉันใช้เปิดดู styleguide
 

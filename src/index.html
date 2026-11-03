@@ -1,23 +1,41 @@
 <!DOCTYPE html>
-<!-- index.html: โครง SPA (header, nav, <main id="app">, footer) header/footer เต็มรูปแบบทำในเฟส 0.5 -->
+<!-- index.html: โครง SPA (header + เมนูมือถือ, <main id="app">, footer) เนื้อหาแต่ละหน้าอยู่ใน page_*.html -->
 <html lang="th">
 <head>
   <base target="_top">
   <meta charset="utf-8">
   <?!= include('css_main'); ?>
 </head>
-<body class="min-h-screen flex flex-col bg-surface-alt font-sans text-ink text-base leading-[1.7]" data-params="<?= initialParamsJson ?>">
-  <a href="#app" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-surface focus:px-4 focus:py-2 focus:rounded-md">ข้ามไปยังเนื้อหา</a>
+<body class="min-h-screen flex flex-col bg-surface-alt font-sans text-ink text-body"
+      data-params="<?= initialParamsJson ?>" data-config="<?= clientConfigJson ?>">
+  <a href="#app" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:rounded-md focus:bg-surface focus:px-4 focus:py-2">ข้ามไปยังเนื้อหา</a>
 
-  <header class="bg-navy-800 text-white">
-    <div class="mx-auto max-w-content px-4 md:px-6 py-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-      <a href="#" data-route="home" class="flex flex-col justify-center min-h-[44px] leading-tight">
-        <span class="font-heading text-lg font-bold"><?= orgName ?></span>
-        <span class="text-sm text-navy-100"><?= schoolName ?></span>
+  <header class="sticky top-0 z-40 bg-navy-800 text-white">
+    <div class="container-content flex min-h-[64px] items-center gap-3">
+      <a href="#" data-route="home" class="flex min-h-[44px] min-w-0 items-center gap-3">
+        <span class="image-placeholder h-10 w-10 shrink-0 rounded-full text-[13px]" aria-hidden="true">โลโก้</span>
+        <span class="flex min-w-0 flex-col leading-tight">
+          <span class="truncate font-heading text-lg font-bold"><?= orgName ?></span>
+          <span class="truncate text-sm text-navy-100"><?= schoolName ?></span>
+        </span>
       </a>
-      <div id="user-menu" class="ml-auto flex items-center gap-2 lg:order-last"></div>
-      <nav aria-label="เมนูหลัก" class="w-full lg:w-auto overflow-x-auto">
-        <ul id="nav-list" class="flex gap-1 whitespace-nowrap"></ul>
+
+      <nav aria-label="เมนูหลัก" class="ml-auto hidden xl:block">
+        <ul id="nav-list" class="flex items-center gap-1"></ul>
+      </nav>
+
+      <div id="header-actions" class="ml-auto hidden items-center gap-2 sm:flex xl:ml-2"></div>
+
+      <button type="button" id="menu-toggle" class="btn-on-dark btn-icon ml-auto sm:ml-0 xl:hidden"
+              aria-expanded="false" aria-controls="mobile-menu" aria-label="เปิดเมนู">
+        <i data-lucide="menu" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <div id="mobile-menu" class="fixed inset-x-0 bottom-0 top-[64px] overflow-y-auto bg-navy-800 xl:hidden" hidden>
+      <nav aria-label="เมนูหลัก (มือถือ)" class="container-content flex flex-col gap-1 py-4">
+        <ul id="mobile-nav-list" class="flex flex-col gap-1"></ul>
+        <div id="mobile-actions" class="mt-4 flex flex-col gap-2 border-t border-navy-700 pt-4"></div>
       </nav>
     </div>
   </header>
@@ -25,11 +43,21 @@
   <main id="app" class="flex-1 outline-none" tabindex="-1"></main>
 
   <footer class="bg-navy-800 text-navy-100">
-    <div class="mx-auto max-w-content px-4 md:px-6 py-8 text-sm">
-      <p class="font-semibold text-white"><?= orgName ?> <?= schoolName ?></p>
-      <p>ที่อยู่ · เบอร์โทร · อีเมล (รอข้อมูลจริง)</p>
+    <div class="container-content grid gap-6 py-10 text-sm md:grid-cols-2">
+      <div>
+        <p class="font-heading text-lg font-bold text-white"><?= orgName ?></p>
+        <p><?= schoolName ?></p>
+        <p class="mt-2"><?= contact.address ?></p>
+      </div>
+      <div class="flex flex-col gap-1 md:items-end">
+        <p>โทร <a class="underline hover:text-white" href="tel:<?= contact.phone ?>"><?= contact.phone ?></a></p>
+        <p>อีเมล <a class="underline hover:text-white" href="mailto:<?= contact.email ?>"><?= contact.email ?></a></p>
+        <p><a href="#" data-route="privacy" class="underline hover:text-white">ประกาศความเป็นส่วนตัว (PDPA)</a></p>
+      </div>
     </div>
   </footer>
+
+  <div id="toast-region" class="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4 sm:bottom-6 sm:right-6 sm:left-auto sm:items-end" aria-live="polite"></div>
 
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
   <?!= include('js_app'); ?>

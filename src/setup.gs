@@ -174,9 +174,7 @@ function setup() {
  * ให้รันได้เฉพาะเจ้าของสคริปต์จาก editor (กันการเรียกผ่าน google.script.run)
  */
 function assertEditorRun_() {
-  const active = Session.getActiveUser().getEmail();
-  const effective = Session.getEffectiveUser().getEmail();
-  if (!active || active !== effective) {
+  if (!isScriptOwner_()) {
     throw new Error('ฟังก์ชันนี้รันได้จาก Apps Script editor โดยเจ้าของสคริปต์เท่านั้น');
   }
 }

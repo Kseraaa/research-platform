@@ -48,6 +48,9 @@
 
   const SESSION_STORAGE_KEY = 'rp_session';
 
+  /** ค่าจาก server (getClientConfig_ ใน config.gs): orgName, contact, statusLabels, fileKinds, requiredFiles, maxFileMb, isOwner */
+  let appConfig = {};
+
   const appState = {
     session: null,          // { token, email, role, name } หลังล็อกอิน
     registrationOpen: false, // ตั้งค่าจาก getHomeData ในเฟส 1
@@ -79,9 +82,13 @@
     return !roles || Boolean(appState.session && roles.indexOf(appState.session.role) !== -1);
   }
 
+  function canAccess(route) {
+    return hasRole(route.roles) || Boolean(route.allowOwner && appConfig.isOwner);
+  }
+
   // ---------- route + เมนู (ดู docs/DESIGN.md ข้อ 5) ----------
 
-  /** roles: null = ทุกคน */
+  /** roles: null = ทุกคน / allowOwner: เปิดได้เมื่อเจ้าของสคริปต์เปิดหน้าเว็บ (เช่น Test deployment) */
   const ROUTES = {
     home:       { title: 'หน้าหลัก', roles: null },
     timeline:   { title: 'Timeline', roles: null },
@@ -91,10 +98,11 @@
     register:   { title: 'ลงทะเบียนนำเสนอ', roles: null },
     track:      { title: 'ติดตามสถานะ', roles: null },
     login:      { title: 'เข้าสู่ระบบ', roles: null },
+    privacy:    { title: 'ประกาศความเป็นส่วนตัว', roles: null },
     library:    { title: 'คลังงานวิจัย', roles: ['teacher', 'admin'] },
     teacher:    { title: 'ส่งงานวิจัย / งานของฉัน', roles: ['teacher'] },
     admin:      { title: 'จัดการระบบ', roles: ['reviewer', 'admin'] },
-    styleguide: { title: 'Styleguide', roles: ['admin'] } // เฟส 0.5: เปิดได้บน Test deployment ด้วย
+    styleguide: { title: 'Styleguide', roles: ['admin'], allowOwner: true }
   };
 
   const NAV_ROUTES = ['home', 'timeline', 'news', 'documents', 'videos', 'library'];
@@ -144,7 +152,8 @@
     const name = ROUTES[params.page] ? params.page : 'home';
     const route = ROUTES[name];
 
-    if (!hasRole(route.roles)) {
+    closeMobileMenu();
+    if (!canAccess(route)) {
       if (!appState.session) {
         navigate('login', { next: name }, { replace: true });
         return;
@@ -166,6 +175,7 @@
     const page = pages[name];
     if (!page) {
       renderMessage(route.title, 'หน้านี้อยู่ระหว่างพัฒนา');
+      refreshIcons();
       return;
     }
 
@@ -183,10 +193,10 @@
   function renderMessage(title, detail) {
     const container = document.getElementById('app');
     container.innerHTML =
-      '<section class="mx-auto max-w-content px-4 md:px-6 py-12 md:py-20 text-center">' +
-        '<h1 class="font-heading text-2xl md:text-3xl font-bold">' + escapeHtml(title) + '</h1>' +
+      '<section class="container-content section text-center">' +
+        '<h1 class="heading-2">' + escapeHtml(title) + '</h1>' +
         '<p class="mt-2 text-ink-muted">' + escapeHtml(detail) + '</p>' +
-        '<a href="#" data-route="home" class="mt-6 inline-flex items-center min-h-[44px] px-4 rounded-md text-navy-500 underline">กลับหน้าหลัก</a>' +
+        '<a href="#" data-route="home" class="btn-secondary mt-6">กลับหน้าหลัก</a>' +
       '</section>';
   }
 
@@ -196,64 +206,152 @@
 
   // ---------- header: เมนูหลัก + เมนูผู้ใช้ ----------
 
-  const NAV_LINK_CLASS = 'inline-flex items-center min-h-[44px] px-3 rounded-md text-navy-100 hover:text-white hover:bg-navy-700';
-  const NAV_LINK_ACTIVE_CLASS = 'inline-flex items-center min-h-[44px] px-3 rounded-md text-white bg-navy-700 font-medium';
+  const NAV_LINK_CLASS = 'inline-flex w-full items-center whitespace-nowrap min-h-[44px] px-3 rounded-md text-navy-100 hover:text-white hover:bg-navy-700';
+  const NAV_LINK_ACTIVE_CLASS = 'inline-flex w-full items-center whitespace-nowrap min-h-[44px] px-3 rounded-md text-white bg-navy-700 font-medium';
 
-  function navLinkHtml(name) {
+  function navLinkHtml(name, label) {
     const active = appState.route === name;
     return '<a href="#" data-route="' + name + '" class="' + (active ? NAV_LINK_ACTIVE_CLASS : NAV_LINK_CLASS) + '"' +
-      (active ? ' aria-current="page"' : '') + '>' + escapeHtml(ROUTES[name].title) + '</a>';
+      (active ? ' aria-current="page"' : '') + '>' + escapeHtml(label || ROUTES[name].title) + '</a>';
+  }
+
+  function userRoutes() {
+    return USER_MENU_ROUTES.filter(name => hasRole(ROUTES[name].roles));
   }
 
   function renderChrome() {
-    const navList = document.getElementById('nav-list');
-    navList.innerHTML = NAV_ROUTES
+    const navItems = NAV_ROUTES
       .filter(name => hasRole(ROUTES[name].roles))
       .map(name => '<li>' + navLinkHtml(name) + '</li>')
       .join('');
+    document.getElementById('nav-list').innerHTML = navItems;
+    document.getElementById('mobile-nav-list').innerHTML = navItems;
 
-    const userMenu = document.getElementById('user-menu');
-    let html = '';
-    if (appState.registrationOpen) {
-      html += '<a href="#" data-route="register" class="inline-flex items-center min-h-[44px] px-4 rounded-md bg-gold-500 text-navy-900 font-semibold">ลงทะเบียนนำเสนอ</a>';
-    }
-    if (appState.session) {
-      html += USER_MENU_ROUTES.filter(name => hasRole(ROUTES[name].roles)).map(navLinkHtml).join('');
-      html += '<span class="text-sm text-navy-100">' + escapeHtml(appState.session.name || appState.session.email) + '</span>';
-      html += '<button type="button" data-action="logout" class="' + NAV_LINK_CLASS + '">ออกจากระบบ</button>';
+    const registerHtml = appState.registrationOpen
+      ? '<a href="#" data-route="register" class="btn-primary whitespace-nowrap">ลงทะเบียนนำเสนอ</a>'
+      : '';
+    const session = appState.session;
+    const displayName = session ? (session.name || session.email) : '';
+
+    // จอกว้าง: ปุ่มลงทะเบียน + เมนูผู้ใช้แบบ dropdown
+    let desktop = registerHtml;
+    if (session) {
+      desktop +=
+        '<div class="relative">' +
+          // 1280–1535px เมนูหลักแนวนอนกินที่ แสดงแค่ไอคอน (ชื่ออยู่ใน aria-label และในแผงเมนู)
+          '<button type="button" id="user-menu-toggle" class="btn-on-dark max-w-[180px]" aria-expanded="false" aria-controls="user-menu-panel" aria-label="เมนูผู้ใช้: ' + escapeHtml(displayName) + '">' +
+            '<i data-lucide="circle-user" aria-hidden="true"></i><span class="truncate xl:hidden 2xl:inline">' + escapeHtml(displayName) + '</span>' +
+          '</button>' +
+          '<div id="user-menu-panel" class="card absolute right-0 top-full mt-2 w-56 p-2 text-ink shadow-md" hidden>' +
+            '<p class="truncate px-4 py-2 text-sm text-ink-muted">' + escapeHtml(displayName) + '</p>' +
+            userRoutes().map(name => '<a href="#" data-route="' + name + '" class="btn-ghost w-full justify-start">' + escapeHtml(ROUTES[name].title) + '</a>').join('') +
+            '<button type="button" data-action="logout" class="btn-ghost w-full justify-start">ออกจากระบบ</button>' +
+          '</div>' +
+        '</div>';
     } else {
-      html += navLinkHtml('login');
+      desktop += '<a href="#" data-route="login" class="btn-on-dark">เข้าสู่ระบบ</a>';
     }
-    userMenu.innerHTML = html;
+    document.getElementById('header-actions').innerHTML = desktop;
+
+    // มือถือ: ต่อท้ายรายการเมนูในแผงเต็มจอ
+    let mobile = registerHtml;
+    if (session) {
+      mobile += '<p class="px-3 text-sm text-navy-100">เข้าสู่ระบบในชื่อ <span class="font-medium text-white">' + escapeHtml(displayName) + '</span></p>';
+      mobile += userRoutes().map(name => navLinkHtml(name)).join('');
+      mobile += '<button type="button" data-action="logout" class="' + NAV_LINK_CLASS + '">ออกจากระบบ</button>';
+    } else {
+      mobile += navLinkHtml('login');
+    }
+    document.getElementById('mobile-actions').innerHTML = mobile;
+    refreshIcons();
+  }
+
+  // ---------- เมนูมือถือ + เมนูผู้ใช้ ----------
+
+  function setMenuIcon(button, name) {
+    button.innerHTML = '<i data-lucide="' + name + '" aria-hidden="true"></i>';
+    refreshIcons();
+  }
+
+  function openMobileMenu() {
+    const toggle = document.getElementById('menu-toggle');
+    document.getElementById('mobile-menu').hidden = false;
+    document.body.classList.add('overflow-hidden');
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.setAttribute('aria-label', 'ปิดเมนู');
+    setMenuIcon(toggle, 'x');
+  }
+
+  function closeMobileMenu() {
+    const menu = document.getElementById('mobile-menu');
+    if (!menu || menu.hidden) return;
+    const toggle = document.getElementById('menu-toggle');
+    menu.hidden = true;
+    document.body.classList.remove('overflow-hidden');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', 'เปิดเมนู');
+    setMenuIcon(toggle, 'menu');
+  }
+
+  function setUserMenuOpen(open) {
+    const toggle = document.getElementById('user-menu-toggle');
+    const panel = document.getElementById('user-menu-panel');
+    if (!toggle || !panel) return;
+    panel.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
   }
 
   // ---------- เริ่มทำงาน ----------
 
-  function readInitialParams() {
+  /** อ่าน JSON จาก data-attribute ของ <body> (ค่าที่ doGet ฝังไว้) */
+  function readBodyJson(key) {
     try {
-      const params = JSON.parse(document.body.dataset.params || '{}');
-      return params && typeof params === 'object' ? params : {};
+      const value = JSON.parse(document.body.dataset[key] || '{}');
+      return value && typeof value === 'object' ? value : {};
     } catch (e) {
       return {};
     }
   }
 
   function startApp() {
+    appConfig = readBodyJson('config');
     loadSession();
 
     document.addEventListener('click', event => {
+      const userToggle = event.target.closest('#user-menu-toggle');
+      setUserMenuOpen(Boolean(userToggle) && userToggle.getAttribute('aria-expanded') !== 'true');
+
       const link = event.target.closest('[data-route]');
       if (link) {
         event.preventDefault();
         navigate(link.dataset.route);
         return;
       }
-      const logout = event.target.closest('[data-action="logout"]');
-      if (logout) {
+      if (event.target.closest('#menu-toggle')) {
+        if (document.getElementById('mobile-menu').hidden) openMobileMenu();
+        else closeMobileMenu();
+        return;
+      }
+      if (event.target.closest('[data-action="logout"]')) {
         // เฟส 4: เรียก callServer('logout', token) ก่อนล้าง session
         clearSession();
         navigate('home');
       }
+    });
+
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape') return;
+      const menu = document.getElementById('mobile-menu');
+      if (!menu.hidden) {
+        closeMobileMenu();
+        document.getElementById('menu-toggle').focus();
+      }
+      setUserMenuOpen(false);
+    });
+
+    // ขยายจอจนเห็นเมนูแนวนอน (xl) แล้ว ปิดเมนูมือถือที่ค้างอยู่
+    window.matchMedia('(min-width: 1280px)').addEventListener('change', event => {
+      if (event.matches) closeMobileMenu();
     });
 
     const history = window.google && google.script && google.script.history;
@@ -261,7 +359,7 @@
       history.setChangeHandler(e => renderRoute(e.state || e.location.parameter));
     }
 
-    const initial = readInitialParams();
+    const initial = readBodyJson('params');
     navigate(initial.page || 'home', initial, { replace: true });
   }
 </script>

@@ -9,6 +9,13 @@ const SCHOOL_NAME = 'โรงเรียน มอ.วิทยานุสร
 const ORG_FULL_NAME = ORG_NAME + ' ' + SCHOOL_NAME;
 const TIMEZONE = 'Asia/Bangkok';
 
+/** ข้อมูลติดต่อใน footer (placeholder ระหว่างพัฒนา เปลี่ยนเป็นของจริงก่อน deploy) */
+const ORG_CONTACT = Object.freeze({
+  address: 'ที่อยู่โรงเรียน (รอข้อมูลจริง)',
+  phone: '0-0000-0000',
+  email: 'research@example.ac.th'
+});
+
 // ---------- Script Properties ----------
 
 const CONFIG_KEYS = Object.freeze([
@@ -187,6 +194,22 @@ const LIMITS = Object.freeze({
   PUBLIC_CACHE_SEC: 10 * 60,
   LOCK_WAIT_MS: 20000
 });
+
+/**
+ * ค่าที่หน้าเว็บต้องใช้ (ไม่มีค่าลับ) ส่งไปกับ index.html ใน doGet
+ * ฝั่ง client อ่านจาก appConfig ใน js_app.html
+ */
+function getClientConfig_() {
+  return {
+    orgName: ORG_NAME,
+    schoolName: SCHOOL_NAME,
+    contact: ORG_CONTACT,
+    statusLabels: STATUS_LABELS_TH,
+    fileKinds: FILE_KIND_SPECS,
+    requiredFiles: REQUIRED_FILES,
+    maxFileMb: getConfig_().MAX_FILE_MB
+  };
+}
 
 /** หมวดเอกสารเริ่มต้นที่ setup() ใส่ให้เมื่อแท็บ DOC_CATEGORIES ยังว่าง */
 const DEFAULT_DOC_CATEGORIES = Object.freeze([

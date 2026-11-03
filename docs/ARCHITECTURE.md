@@ -47,7 +47,7 @@ research-platform/
     ├── js_app.html        ← callServer, router, state, util (escape, format วันที่ไทย)
     ├── js_ui.html         ← component JS: toast, modal, dropzone, statusBadge, pagination, skeleton
     ├── js_upload.html     ← อ่านไฟล์เป็น base64 + progress
-    ├── page_styleguide.html ← รวมทุก component (route `styleguide` เปิดได้เฉพาะ admin หรือ Test deployment)
+    ├── page_styleguide.html ← รวมทุก component (route `styleguide` เปิดได้เฉพาะ admin หรือเจ้าของสคริปต์ที่ล็อกอิน Google อยู่ ตรวจด้วย `isScriptOwner_()` ใน Code.gs)
     ├── page_home.html     ← หน้าแรก
     ├── page_timeline.html ← กำหนดการเต็ม
     ├── page_news.html     ← รายการข่าว + รายละเอียดข่าว
@@ -68,7 +68,8 @@ research-platform/
 - `doGet(e)` คืน `index.html` เสมอ และฝังพารามิเตอร์เริ่มต้น (`e.parameter.page`, `e.parameter.t`) ลงตัวแปร JS
 - เปลี่ยนหน้าในฝั่ง client ด้วย `google.script.history.push(state, query)` และฟัง `google.script.history.setChangeHandler`
 - ไม่ reload หน้า session token จึงอยู่ในหน่วยความจำได้ตลอด (เก็บสำรองใน `sessionStorage` แบบห่อ try/catch)
-- route: `home`, `timeline`, `news`, `documents`, `videos`, `register`, `teacher`, `track`, `library`, `login`, `admin`, `styleguide` (ดูเมนูและสิทธิ์ใน `docs/DESIGN.md` ข้อ 5)
+- route: `home`, `timeline`, `news`, `documents`, `videos`, `register`, `teacher`, `track`, `library`, `login`, `admin`, `privacy`, `styleguide` (ดูเมนูและสิทธิ์ใน `docs/DESIGN.md` ข้อ 5)
+- ค่าที่หน้าเว็บต้องใช้ (ป้ายสถานะ, ชนิดไฟล์, ไฟล์บังคับ, `MAX_FILE_MB`, ข้อมูลติดต่อ) มาจาก `getClientConfig_()` ใน config.gs ผ่าน `data-config` ของ `<body>` ฝั่ง client อ่านจาก `appConfig` ห้ามเขียนค่าเหล่านี้ซ้ำในฝั่ง client
 
 ## 4. รูปแบบการเรียก server
 

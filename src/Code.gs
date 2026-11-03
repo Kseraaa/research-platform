@@ -17,15 +17,33 @@ function doGet(e) {
     if (params[key]) initialParams[key] = String(params[key]).slice(0, INITIAL_PARAM_MAX_LENGTH);
   });
 
+  const clientConfig = getClientConfig_();
+  clientConfig.isOwner = isScriptOwner_();
+
   const template = HtmlService.createTemplateFromFile('index');
   // ส่งผ่าน data-attribute ด้วย <?= ?> (escape) ฝั่ง client อ่านด้วย JSON.parse
   template.initialParamsJson = JSON.stringify(initialParams);
+  template.clientConfigJson = JSON.stringify(clientConfig);
   template.orgName = ORG_NAME;
   template.schoolName = SCHOOL_NAME;
+  template.contact = ORG_CONTACT;
 
   return template.evaluate()
     .setTitle(ORG_FULL_NAME)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+/**
+ * ผู้เปิดหน้าเว็บคือเจ้าของสคริปต์ที่ล็อกอิน Google อยู่หรือไม่ (เช่นเปิด Test deployment /dev)
+ * ใช้แค่เปิดหน้า styleguide ห้ามใช้แทนการตรวจสิทธิ์ข้อมูล
+ */
+function isScriptOwner_() {
+  try {
+    const active = Session.getActiveUser().getEmail();
+    return Boolean(active) && active === Session.getEffectiveUser().getEmail();
+  } catch (e) {
+    return false;
+  }
 }
 
 /**

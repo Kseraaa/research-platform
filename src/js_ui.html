@@ -1,1 +1,671 @@
-<!-- js_ui.html: component JS: toast, modal, dropzone, statusBadge, pagination, skeleton (เฟส 0.5) -->
+<!-- js_ui.html: component JS กลาง (ดูตัวอย่างทุกสถานะใน page_styleguide.html)
+     render*() คืน HTML string ที่ escape แล้ว / create*() คืน element ที่มีพฤติกรรมในตัว
+     หลังใส่ HTML ที่มีไอคอนลงหน้า ให้เรียก refreshIcons() (router เรียกให้หลัง render หน้าแล้ว) -->
+<script>
+  // ---------- พื้นฐาน ----------
+
+  /** ไอคอน Lucide (เส้น) */
+  function icon(name, className) {
+    return '<i data-lucide="' + escapeHtml(name) + '" class="h-5 w-5 shrink-0 ' + (className || '') + '" aria-hidden="true"></i>';
+  }
+
+  /** 1536 → '1.5 KB', 2_400_000 → '2.3 MB' */
+  function formatFileSize(bytes) {
+    const n = Number(bytes) || 0;
+    if (n >= 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB';
+    if (n >= 1024) return Math.round(n / 1024) + ' KB';
+    return n + ' B';
+  }
+
+  function htmlToElement(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html.trim();
+    return tpl.content.firstElementChild;
+  }
+
+  const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  // ---------- button loading ----------
+
+  /** setButtonLoading(btn, true, 'กำลังส่ง...') / setButtonLoading(btn, false) */
+  function setButtonLoading(button, loading, text) {
+    if (loading) {
+      if (button.dataset.originalHtml === undefined) button.dataset.originalHtml = button.innerHTML;
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      button.innerHTML = '<span class="spinner" aria-hidden="true"></span><span>' + escapeHtml(text || 'กำลังส่ง...') + '</span>';
+    } else {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      if (button.dataset.originalHtml !== undefined) {
+        button.innerHTML = button.dataset.originalHtml;
+        delete button.dataset.originalHtml;
+      }
+      refreshIcons();
+    }
+  }
+
+  // ---------- alert + toast ----------
+
+  const ALERT_ICONS = { info: 'info', success: 'circle-check', warning: 'triangle-alert', danger: 'circle-alert' };
+
+  /** renderAlert('warning', 'ข้อความ', 'หัวข้อ (ไม่บังคับ)') */
+  function renderAlert(type, message, title) {
+    const variant = ALERT_ICONS[type] ? type : 'info';
+    return '<div class="alert-' + variant + '" role="' + (variant === 'danger' ? 'alert' : 'status') + '">' +
+      icon(ALERT_ICONS[variant], 'mt-0.5') +
+      '<div>' +
+        (title ? '<p class="font-semibold">' + escapeHtml(title) + '</p>' : '') +
+        '<p>' + escapeHtml(message) + '</p>' +
+      '</div>' +
+    '</div>';
+  }
+
+  /** toast('บันทึกแล้ว', 'success') หายเองใน 5 วินาที */
+  function toast(message, type, options) {
+    const variant = ALERT_ICONS[type] ? type : 'info';
+    const duration = (options && options.duration) || 5000;
+    const el = htmlToElement(
+      '<div class="alert-' + variant + ' pointer-events-auto w-full max-w-sm shadow-md">' +
+        icon(ALERT_ICONS[variant], 'mt-0.5') +
+        '<p class="flex-1"></p>' +
+        '<button type="button" class="-m-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-md" aria-label="ปิดการแจ้งเตือน">' + icon('x') + '</button>' +
+      '</div>'
+    );
+    el.querySelector('p').textContent = message;
+    const remove = () => el.remove();
+    el.querySelector('button').addEventListener('click', remove);
+    document.getElementById('toast-region').appendChild(el);
+    refreshIcons();
+    setTimeout(remove, duration);
+    return remove;
+  }
+
+  // ---------- modal ----------
+
+  /**
+   * modal({ title, content: 'ข้อความ' | Node, actions: [{ label, variant: 'primary'|'secondary'|'danger'|'ghost', onClick(close) }] })
+   * คืน { element, close }
+   */
+  function modal(options) {
+    const opts = options || {};
+    const previousFocus = document.activeElement;
+    const titleId = 'modal-title-' + Date.now();
+    const overlay = htmlToElement(
+      '<div class="fixed inset-0 z-50 flex items-end justify-center bg-navy-900/60 p-4 sm:items-center">' +
+        '<div class="card max-h-full w-full max-w-lg overflow-y-auto p-6 shadow-md" role="dialog" aria-modal="true" aria-labelledby="' + titleId + '">' +
+          '<div class="flex items-start justify-between gap-4">' +
+            '<h2 id="' + titleId + '" class="heading-3"></h2>' +
+            '<button type="button" data-modal-close class="btn-ghost btn-icon -m-2" aria-label="ปิด">' + icon('x') + '</button>' +
+          '</div>' +
+          '<div data-modal-body class="mt-3 text-ink-muted"></div>' +
+          '<div data-modal-actions class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"></div>' +
+        '</div>' +
+      '</div>'
+    );
+    overlay.querySelector('h2').textContent = opts.title || '';
+    const body = overlay.querySelector('[data-modal-body]');
+    if (opts.content instanceof Node) body.appendChild(opts.content);
+    else body.textContent = opts.content || '';
+
+    let closed = false;
+    function close() {
+      if (closed) return;
+      closed = true;
+      overlay.remove();
+      document.removeEventListener('keydown', onKeydown, true);
+      document.body.classList.remove('overflow-hidden');
+      if (previousFocus && previousFocus.focus) previousFocus.focus();
+      if (opts.onClose) opts.onClose();
+    }
+
+    const actions = overlay.querySelector('[data-modal-actions]');
+    (opts.actions || []).forEach(action => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-' + (action.variant || 'secondary');
+      btn.textContent = action.label;
+      btn.addEventListener('click', () => action.onClick ? action.onClick(close) : close());
+      actions.appendChild(btn);
+    });
+    if (!actions.children.length) actions.remove();
+
+    function onKeydown(event) {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        close();
+      } else if (event.key === 'Tab') {
+        const items = Array.from(overlay.querySelectorAll(FOCUSABLE_SELECTOR));
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    }
+
+    overlay.addEventListener('click', event => {
+      if (event.target === overlay || event.target.closest('[data-modal-close]')) close();
+    });
+    document.addEventListener('keydown', onKeydown, true);
+    document.body.classList.add('overflow-hidden');
+    document.body.appendChild(overlay);
+    refreshIcons();
+    const firstAction = actions.isConnected ? actions.querySelector('button') : null;
+    (firstAction || overlay.querySelector('[data-modal-close]')).focus();
+    return { element: overlay, close: close };
+  }
+
+  /** confirmDialog({ title, message, confirmLabel, danger }) → Promise<boolean> */
+  function confirmDialog(options) {
+    return new Promise(resolve => {
+      let result = false;
+      modal({
+        title: options.title,
+        content: options.message,
+        onClose: () => resolve(result),
+        actions: [
+          { label: options.cancelLabel || 'ยกเลิก', variant: 'secondary' },
+          { label: options.confirmLabel || 'ยืนยัน', variant: options.danger ? 'danger' : 'primary', onClick: close => { result = true; close(); } }
+        ]
+      });
+    });
+  }
+
+  // ---------- status badge ----------
+
+  const STATUS_BADGE_VARIANTS = {
+    draft: 'neutral',
+    submitted: 'info',
+    under_review: 'info',
+    revision_requested: 'warning',
+    resubmitted: 'info',
+    accepted: 'success',
+    recorded: 'success',
+    rejected: 'danger'
+  };
+
+  function renderStatusBadge(status) {
+    const labels = appConfig.statusLabels || {};
+    const variant = STATUS_BADGE_VARIANTS[status] || 'neutral';
+    return '<span class="badge-' + variant + '">' + escapeHtml(labels[status] || status) + '</span>';
+  }
+
+  // ---------- form field ----------
+
+  /**
+   * renderField({ id, label, type, required, help, placeholder, value, multiline, autocomplete, inputmode })
+   */
+  function renderField(f) {
+    const helpId = f.help ? f.id + '-help' : '';
+    const common = 'id="' + escapeHtml(f.id) + '" name="' + escapeHtml(f.name || f.id) + '" class="field-input"' +
+      (f.required ? ' required aria-required="true"' : '') +
+      (f.placeholder ? ' placeholder="' + escapeHtml(f.placeholder) + '"' : '') +
+      (f.autocomplete ? ' autocomplete="' + escapeHtml(f.autocomplete) + '"' : '') +
+      (f.inputmode ? ' inputmode="' + escapeHtml(f.inputmode) + '"' : '') +
+      (f.maxlength ? ' maxlength="' + Number(f.maxlength) + '"' : '') +
+      (f.disabled ? ' disabled' : '') +
+      (helpId ? ' aria-describedby="' + helpId + '"' : '');
+    const control = f.multiline
+      ? '<textarea ' + common + ' rows="4">' + escapeHtml(f.value || '') + '</textarea>'
+      : '<input type="' + escapeHtml(f.type || 'text') + '" ' + common + ' value="' + escapeHtml(f.value || '') + '">';
+    return '<div class="field">' +
+      '<label for="' + escapeHtml(f.id) + '" class="field-label">' + escapeHtml(f.label) +
+        (f.required ? ' <span class="field-required" aria-hidden="true">*</span>' : '') + '</label>' +
+      control +
+      (f.help ? '<p id="' + helpId + '" class="field-help">' + escapeHtml(f.help) + '</p>' : '') +
+    '</div>';
+  }
+
+  /** แสดง error ใต้ช่อง (ไอคอน + ข้อความสีแดง) และผูกกับ aria-describedby */
+  function setFieldError(input, message) {
+    const errorId = input.id + '-error';
+    let error = document.getElementById(errorId);
+    if (!error) {
+      error = document.createElement('p');
+      error.id = errorId;
+      error.className = 'field-error';
+      (input.closest('.field, fieldset') || input.parentNode).appendChild(error);
+    }
+    error.innerHTML = icon('circle-alert', 'mt-0.5 h-4 w-4') + '<span></span>';
+    error.querySelector('span').textContent = message;
+    input.setAttribute('aria-invalid', 'true');
+    const describedBy = (input.getAttribute('aria-describedby') || '').split(' ').filter(Boolean);
+    if (describedBy.indexOf(errorId) === -1) describedBy.push(errorId);
+    input.setAttribute('aria-describedby', describedBy.join(' '));
+    refreshIcons();
+  }
+
+  function clearFieldError(input) {
+    const errorId = input.id + '-error';
+    const error = document.getElementById(errorId);
+    if (error) error.remove();
+    input.removeAttribute('aria-invalid');
+    const describedBy = (input.getAttribute('aria-describedby') || '').split(' ').filter(id => id && id !== errorId);
+    if (describedBy.length) input.setAttribute('aria-describedby', describedBy.join(' '));
+    else input.removeAttribute('aria-describedby');
+  }
+
+  /**
+   * radio card ขนาดใหญ่ กดได้ทั้งใบ: renderRadioCard({ name, value, title, description, items: ['ไฟล์...'] })
+   */
+  function renderRadioCard(o) {
+    const id = o.name + '-' + o.value;
+    return '<label for="' + escapeHtml(id) + '" class="radio-card">' +
+      '<input type="radio" id="' + escapeHtml(id) + '" name="' + escapeHtml(o.name) + '" value="' + escapeHtml(o.value) + '"' +
+        (o.checked ? ' checked' : '') + (o.required ? ' required' : '') + '>' +
+      '<span class="flex flex-col gap-1">' +
+        '<span class="heading-3">' + escapeHtml(o.title) + '</span>' +
+        (o.description ? '<span class="text-meta">' + escapeHtml(o.description) + '</span>' : '') +
+        (o.items && o.items.length
+          ? '<ul class="mt-1 list-disc pl-5 text-sm text-ink-muted">' + o.items.map(item => '<li>' + escapeHtml(item) + '</li>').join('') + '</ul>'
+          : '') +
+      '</span>' +
+    '</label>';
+  }
+
+  /**
+   * ตัวเลือก ใช่/ไม่ใช่ ที่ต้องเลือกเอง (ไม่มีค่าเริ่มต้น): renderYesNo({ name, legend, help, required })
+   */
+  function renderYesNo(o) {
+    return '<fieldset class="field">' +
+      '<legend class="field-label mb-1">' + escapeHtml(o.legend) +
+        (o.required ? ' <span class="field-required" aria-hidden="true">*</span>' : '') + '</legend>' +
+      (o.help ? '<p class="field-help mb-2">' + escapeHtml(o.help) + '</p>' : '') +
+      '<div class="choice-group">' +
+        renderRadioCard({ name: o.name, value: 'yes', title: o.yesLabel || 'ใช่', required: o.required }) +
+        renderRadioCard({ name: o.name, value: 'no', title: o.noLabel || 'ไม่ใช่', required: o.required }) +
+      '</div>' +
+    '</fieldset>';
+  }
+
+  // ---------- file dropzone ----------
+
+  /**
+   * createDropzone({ fileKind, label, required, onChange(file|null), onRetry(file) })
+   * 1 ช่องต่อ 1 file_kind ตรวจนามสกุล/MIME/ขนาดก่อนรับไฟล์
+   * คืน { element, getFile, setFile(file), setUploading(percent), setSuccess(), setError(message), reset() }
+   */
+  function createDropzone(options) {
+    const spec = (appConfig.fileKinds || {})[options.fileKind] || { ext: 'pdf', mime: 'application/pdf', label: options.fileKind };
+    const maxMb = options.maxMb || appConfig.maxFileMb || 20;
+    const label = options.label || spec.label;
+    const baseId = 'dz-' + options.fileKind + '-' + Math.random().toString(36).slice(2, 7);
+    const typeText = spec.ext === 'pdf' ? 'PDF' : 'Word (.docx)';
+
+    const element = document.createElement('div');
+    element.className = 'dropzone';
+    element.setAttribute('role', 'group');
+    element.setAttribute('aria-labelledby', baseId + '-label');
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.' + spec.ext + ',' + spec.mime;
+    input.className = 'sr-only';
+    input.tabIndex = -1;
+    input.id = baseId + '-input';
+
+    let file = null;
+    let state = 'empty';
+
+    function header() {
+      return '<p id="' + baseId + '-label" class="font-medium">' + escapeHtml(label) +
+          (options.required ? ' <span class="field-required" aria-hidden="true">*</span>' : '') + '</p>' +
+        '<p class="text-meta">ไฟล์ ' + typeText + ' · ไม่เกิน ' + maxMb + ' MB</p>';
+    }
+
+    function fileLine(iconName) {
+      return '<div class="mt-3 flex items-center gap-3">' + icon(iconName, 'text-navy-500') +
+        '<div class="min-w-0 flex-1"><p class="truncate font-medium">' + escapeHtml(file.name) + '</p>' +
+        '<p class="text-meta">' + formatFileSize(file.size) + '</p></div></div>';
+    }
+
+    function render(extra) {
+      element.dataset.state = state;
+      let body = '';
+      if (state === 'empty') {
+        body = '<div class="mt-3 flex flex-col items-center gap-2 py-4 text-center">' + icon('file-up', 'h-8 w-8 text-navy-500') +
+          '<p class="text-meta">ลากไฟล์มาวางที่นี่ หรือ</p>' +
+          '<button type="button" data-dz="pick" class="btn-secondary">เลือกไฟล์</button></div>';
+      } else if (state === 'selected') {
+        body = fileLine('file-text') +
+          '<div class="mt-3 flex gap-2"><button type="button" data-dz="pick" class="btn-secondary">เปลี่ยนไฟล์</button>' +
+          '<button type="button" data-dz="remove" class="btn-ghost">ลบ</button></div>';
+      } else if (state === 'uploading') {
+        const pct = Math.max(0, Math.min(100, Math.round(extra || 0)));
+        body = fileLine('file-text') +
+          '<div class="mt-3 progress" role="progressbar" aria-label="ความคืบหน้าการอัปโหลด" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '">' +
+            '<div class="progress-bar" style="width:' + pct + '%"></div></div>' +
+          '<p class="mt-1 text-meta">กำลังอัปโหลด... ' + pct + '%</p>';
+      } else if (state === 'success') {
+        body = fileLine('file-text') +
+          '<p class="mt-2 flex items-center gap-1 text-sm font-medium text-success-fg">' + icon('circle-check', 'h-4 w-4') + 'อัปโหลดสำเร็จ</p>';
+      } else if (state === 'error') {
+        body = (file ? fileLine('file-text') : '') +
+          '<p class="mt-2 flex items-start gap-1 text-sm text-danger-fg">' + icon('circle-alert', 'mt-0.5 h-4 w-4') + '<span>' + escapeHtml(extra || 'อัปโหลดไม่สำเร็จ') + '</span></p>' +
+          '<div class="mt-3 flex gap-2">' +
+            (file && options.onRetry ? '<button type="button" data-dz="retry" class="btn-secondary">' + icon('refresh-cw', 'h-4 w-4') + 'ลองใหม่</button>' : '') +
+            '<button type="button" data-dz="pick" class="btn-ghost">' + (file ? 'เปลี่ยนไฟล์' : 'เลือกไฟล์') + '</button></div>';
+      }
+      element.innerHTML = header() + body + '<p class="sr-only" aria-live="polite">' + escapeHtml(liveText(extra)) + '</p>';
+      element.appendChild(input);
+      refreshIcons();
+    }
+
+    function liveText(extra) {
+      if (state === 'selected') return 'เลือกไฟล์ ' + file.name + ' แล้ว';
+      if (state === 'success') return 'อัปโหลด ' + file.name + ' สำเร็จ';
+      if (state === 'error') return extra || 'อัปโหลดไม่สำเร็จ';
+      return '';
+    }
+
+    function validate(candidate) {
+      const name = candidate.name.toLowerCase();
+      // บางเบราว์เซอร์/เครื่องไม่ส่ง MIME ของ .docx มา (ว่างหรือ octet-stream) server ตรวจ magic bytes ซ้ำอีกรอบ
+      const mimeOk = !candidate.type || candidate.type === spec.mime || candidate.type === 'application/octet-stream';
+      if (!name.endsWith('.' + spec.ext) || !mimeOk) {
+        return 'ต้องเป็นไฟล์ ' + typeText + ' เท่านั้น';
+      }
+      if (candidate.size === 0) return 'ไฟล์ว่างเปล่า กรุณาเลือกไฟล์ใหม่';
+      if (candidate.size > maxMb * 1024 * 1024) return 'ไฟล์ใหญ่เกิน ' + maxMb + ' MB';
+      return '';
+    }
+
+    function accept(candidate) {
+      if (!candidate || state === 'uploading') return;
+      const error = validate(candidate);
+      if (error) {
+        file = null;
+        state = 'error';
+        render(error);
+      } else {
+        file = candidate;
+        state = 'selected';
+        render();
+      }
+      if (options.onChange) options.onChange(file);
+    }
+
+    element.addEventListener('click', event => {
+      const action = event.target.closest('[data-dz]');
+      if (!action) return;
+      const kind = action.dataset.dz;
+      if (kind === 'pick') input.click();
+      else if (kind === 'remove') api.reset();
+      else if (kind === 'retry' && options.onRetry) options.onRetry(file);
+    });
+    input.addEventListener('change', () => { accept(input.files[0]); input.value = ''; });
+    element.addEventListener('dragover', event => { event.preventDefault(); element.dataset.dragover = 'true'; });
+    element.addEventListener('dragleave', () => { delete element.dataset.dragover; });
+    element.addEventListener('drop', event => {
+      event.preventDefault();
+      delete element.dataset.dragover;
+      accept(event.dataTransfer.files[0]);
+    });
+
+    const api = {
+      element: element,
+      getFile: () => file,
+      setFile: candidate => accept(candidate),
+      setUploading: percent => { state = 'uploading'; render(percent); },
+      setSuccess: () => { state = 'success'; render(); },
+      setError: message => { state = 'error'; render(message); },
+      reset: () => {
+        file = null;
+        state = 'empty';
+        render();
+        if (options.onChange) options.onChange(null);
+      }
+    };
+    render();
+    return api;
+  }
+
+  // ---------- stepper ----------
+
+  /** renderStepper(['ข้อมูลผู้สมัคร', 'ผลงาน', 'อัปโหลดไฟล์', 'ตรวจสอบและส่ง'], 2) (เริ่มนับที่ 1) */
+  function renderStepper(steps, current) {
+    const mobile = '<p class="text-sm font-medium text-ink-muted md:hidden">ขั้นที่ ' + current + ' จาก ' + steps.length +
+      ': <span class="text-ink">' + escapeHtml(steps[current - 1] || '') + '</span></p>';
+    const items = steps.map((label, i) => {
+      const n = i + 1;
+      const status = n < current ? 'done' : n === current ? 'current' : 'todo';
+      const dot = status === 'done' ? icon('check', 'h-4 w-4') : String(n);
+      return '<li class="flex flex-1 items-center gap-2 last:flex-none"' + (status === 'current' ? ' aria-current="step"' : '') + '>' +
+        '<span class="step-dot-' + status + '">' + dot + '</span>' +
+        '<span class="whitespace-nowrap text-sm ' + (status === 'todo' ? 'text-ink-muted' : 'font-medium text-ink') + '">' + escapeHtml(label) +
+          (status === 'done' ? '<span class="sr-only"> (เสร็จแล้ว)</span>' : '') + '</span>' +
+        (n < steps.length ? '<span class="mx-2 h-0.5 flex-1 ' + (status === 'done' ? 'bg-navy-500' : 'bg-line') + '" aria-hidden="true"></span>' : '') +
+      '</li>';
+    }).join('');
+    return '<nav aria-label="ขั้นตอน">' + mobile + '<ol class="hidden items-center md:flex">' + items + '</ol></nav>';
+  }
+
+  // ---------- timeline ----------
+
+  /** วันที่ (YYYY-MM-DD) ตามเวลาไทย ใช้เทียบว่ารายการผ่านไปแล้วหรือยัง */
+  function bangkokDayKey(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime())) return '';
+    return new Date(date.getTime() + BANGKOK_OFFSET_MS).toISOString().slice(0, 10);
+  }
+
+  /**
+   * renderTimeline([{ title, start_date, end_date, detail }], now)
+   * ผ่านแล้ว: จาง / กำลังดำเนินการ: จุดทอง + ป้าย
+   */
+  function renderTimeline(items, now) {
+    const today = bangkokDayKey(now || new Date());
+    const sorted = items.slice().sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)));
+    return '<ol class="timeline">' + sorted.map(item => {
+      const start = bangkokDayKey(item.start_date);
+      const end = item.end_date ? bangkokDayKey(item.end_date) : start;
+      const state = end < today ? 'past' : start <= today ? 'current' : 'upcoming';
+      const dateText = formatThaiDate(item.start_date) +
+        (item.end_date && end !== start ? ' – ' + formatThaiDate(item.end_date) : '');
+      return '<li class="timeline-item" data-state="' + state + '"' + (state === 'current' ? ' aria-current="date"' : '') + '>' +
+        '<span class="timeline-dot" aria-hidden="true"></span>' +
+        '<p class="text-meta">' + escapeHtml(dateText) +
+          (state === 'past' ? '<span class="sr-only"> (ผ่านไปแล้ว)</span>' : '') + '</p>' +
+        '<p class="font-semibold">' + escapeHtml(item.title) +
+          (state === 'current' ? ' <span class="badge bg-gold-50 text-gold-700">กำลังดำเนินการ</span>' : '') + '</p>' +
+        (item.detail ? '<p class="text-meta">' + escapeHtml(item.detail) + '</p>' : '') +
+      '</li>';
+    }).join('') + '</ol>';
+  }
+
+  // ---------- loading / empty / error ----------
+
+  /** renderSkeleton('cards' | 'table' | 'text', จำนวน) */
+  function renderSkeleton(kind, count) {
+    const n = count || 3;
+    let body = '';
+    if (kind === 'table') {
+      body = '<div class="card divide-y divide-line">' + Array.from({ length: n }, () =>
+        '<div class="flex gap-4 p-4"><div class="skeleton h-4 w-1/4"></div><div class="skeleton h-4 flex-1"></div><div class="skeleton h-4 w-20"></div></div>'
+      ).join('') + '</div>';
+    } else if (kind === 'text') {
+      body = '<div class="flex flex-col gap-3">' + Array.from({ length: n }, (_, i) =>
+        '<div class="skeleton h-4 ' + (i === n - 1 ? 'w-2/3' : 'w-full') + '"></div>'
+      ).join('') + '</div>';
+    } else {
+      body = '<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">' + Array.from({ length: n }, () =>
+        '<div class="card p-4"><div class="skeleton h-32 w-full"></div><div class="skeleton mt-4 h-5 w-3/4"></div><div class="skeleton mt-2 h-4 w-1/2"></div></div>'
+      ).join('') + '</div>';
+    }
+    return '<div aria-busy="true"><span class="sr-only" role="status">กำลังโหลด...</span>' + body + '</div>';
+  }
+
+  /** renderEmptyState({ icon, title, message, actionLabel, actionRoute }) */
+  function renderEmptyState(o) {
+    return '<div class="card flex flex-col items-center gap-2 px-6 py-12 text-center">' +
+      '<span class="flex h-14 w-14 items-center justify-center rounded-full bg-navy-50 text-navy-500">' + icon(o.icon || 'inbox', 'h-7 w-7') + '</span>' +
+      '<p class="heading-3 mt-2">' + escapeHtml(o.title) + '</p>' +
+      (o.message ? '<p class="text-meta max-w-md">' + escapeHtml(o.message) + '</p>' : '') +
+      (o.actionLabel && o.actionRoute ? '<a href="#" data-route="' + escapeHtml(o.actionRoute) + '" class="btn-secondary mt-4">' + escapeHtml(o.actionLabel) + '</a>' : '') +
+    '</div>';
+  }
+
+  /** createErrorState('ข้อความ', onRetry) → element พร้อมปุ่มลองใหม่ */
+  function createErrorState(message, onRetry) {
+    const el = htmlToElement(
+      '<div class="card flex flex-col items-center gap-2 px-6 py-12 text-center" role="alert">' +
+        '<span class="flex h-14 w-14 items-center justify-center rounded-full bg-danger-bg text-danger-fg">' + icon('circle-alert', 'h-7 w-7') + '</span>' +
+        '<p class="heading-3 mt-2">โหลดข้อมูลไม่สำเร็จ</p>' +
+        '<p class="text-meta max-w-md"></p>' +
+      '</div>'
+    );
+    el.querySelector('.text-meta').textContent = message || 'กรุณาลองใหม่อีกครั้ง';
+    if (onRetry) {
+      const btn = htmlToElement('<button type="button" class="btn-secondary mt-4">' + icon('refresh-cw', 'h-4 w-4') + 'ลองใหม่</button>');
+      btn.addEventListener('click', onRetry);
+      el.appendChild(btn);
+    }
+    return el;
+  }
+
+  // ---------- pagination ----------
+
+  /** createPagination({ page, totalPages, onChange(page) }) */
+  function createPagination(o) {
+    const nav = document.createElement('nav');
+    nav.setAttribute('aria-label', 'เลือกหน้า');
+    if (!o.totalPages || o.totalPages <= 1) return nav;
+
+    const pages = [];
+    for (let p = 1; p <= o.totalPages; p++) {
+      if (p === 1 || p === o.totalPages || Math.abs(p - o.page) <= 1) pages.push(p);
+      else if (pages[pages.length - 1] !== '…') pages.push('…');
+    }
+    nav.innerHTML = '<ul class="flex flex-wrap items-center justify-center gap-1">' +
+      '<li><button type="button" class="page-btn px-3" data-page="' + (o.page - 1) + '"' + (o.page <= 1 ? ' disabled' : '') + ' aria-label="หน้าก่อนหน้า">' +
+        icon('chevron-left', 'h-4 w-4') + '<span class="hidden sm:inline">ก่อนหน้า</span></button></li>' +
+      pages.map(p => p === '…'
+        ? '<li><span class="px-2 text-ink-muted" aria-hidden="true">…</span></li>'
+        : '<li><button type="button" class="page-btn" data-page="' + p + '"' + (p === o.page ? ' aria-current="page"' : '') + ' aria-label="หน้า ' + p + '">' + p + '</button></li>'
+      ).join('') +
+      '<li><button type="button" class="page-btn px-3" data-page="' + (o.page + 1) + '"' + (o.page >= o.totalPages ? ' disabled' : '') + ' aria-label="หน้าถัดไป">' +
+        '<span class="hidden sm:inline">ถัดไป</span>' + icon('chevron-right', 'h-4 w-4') + '</button></li>' +
+    '</ul>';
+    nav.addEventListener('click', event => {
+      const btn = event.target.closest('button[data-page]');
+      if (!btn || btn.disabled) return;
+      const page = Number(btn.dataset.page);
+      if (page !== o.page) o.onChange(page);
+    });
+    return nav;
+  }
+
+  // ---------- tabs ----------
+
+  /**
+   * createTabs({ label, items: [{ id, label }], selected, onChange(id) }) ปุ่มลูกศรซ้าย/ขวาเลื่อนแท็บได้
+   */
+  function createTabs(o) {
+    const list = document.createElement('div');
+    list.className = 'tab-list';
+    list.setAttribute('role', 'tablist');
+    list.setAttribute('aria-label', o.label || 'หมวดหมู่');
+    let selected = o.selected || (o.items[0] && o.items[0].id);
+
+    function render() {
+      list.innerHTML = o.items.map(item =>
+        '<button type="button" role="tab" class="tab" data-tab="' + escapeHtml(item.id) + '" aria-selected="' + (item.id === selected) + '" tabindex="' + (item.id === selected ? '0' : '-1') + '">' +
+          escapeHtml(item.label) + '</button>'
+      ).join('');
+    }
+
+    function select(id, focus) {
+      if (id === selected) return;
+      selected = id;
+      render();
+      if (focus) list.querySelector('[aria-selected="true"]').focus();
+      o.onChange(id);
+    }
+
+    list.addEventListener('click', event => {
+      const tab = event.target.closest('[data-tab]');
+      if (tab) select(tab.dataset.tab, false);
+    });
+    list.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      const ids = o.items.map(item => item.id);
+      const step = event.key === 'ArrowRight' ? 1 : -1;
+      select(ids[(ids.indexOf(selected) + step + ids.length) % ids.length], true);
+    });
+    render();
+    return list;
+  }
+
+  // ---------- table (แอดมิน) ----------
+
+  /**
+   * renderDataTable({ caption, columns: [{ key, label, html(row) }], rows })
+   * html(row) ต้องคืน HTML ที่ escape แล้ว ถ้าไม่ระบุจะ escape ค่า row[key] ให้
+   */
+  function renderDataTable(o) {
+    return '<div class="card overflow-x-auto md:overflow-visible border-0 bg-transparent md:border md:bg-surface">' +
+      '<table class="data-table">' +
+        (o.caption ? '<caption class="sr-only">' + escapeHtml(o.caption) + '</caption>' : '') +
+        '<thead><tr>' + o.columns.map(c => '<th scope="col">' + escapeHtml(c.label) + '</th>').join('') + '</tr></thead>' +
+        '<tbody>' + o.rows.map(row =>
+          '<tr>' + o.columns.map(c =>
+            '<td data-label="' + escapeHtml(c.label) + '">' + (c.html ? c.html(row) : escapeHtml(row[c.key])) + '</td>'
+          ).join('') + '</tr>'
+        ).join('') + '</tbody>' +
+      '</table></div>';
+  }
+
+  // ---------- document card + video card ----------
+
+  function documentDownloadUrl(driveFileId) {
+    return 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(driveFileId);
+  }
+
+  /** renderDocumentCard({ title, author, academic_year, file_type, size_kb, drive_file_id }) */
+  function renderDocumentCard(doc) {
+    const type = ['pdf', 'docx', 'pptx', 'xlsx'].indexOf(doc.file_type) !== -1 ? doc.file_type : 'pdf';
+    const meta = [doc.author, doc.academic_year ? 'ปีการศึกษา ' + doc.academic_year : '', doc.size_kb ? formatFileSize(doc.size_kb * 1024) : '']
+      .filter(Boolean).map(escapeHtml).join(' · ');
+    return '<article class="card card-hover flex flex-col gap-3 p-4">' +
+      '<span class="filetype-' + type + ' self-start">' + type + '</span>' +
+      '<h3 class="heading-3 line-clamp-2">' + escapeHtml(doc.title) + '</h3>' +
+      '<p class="text-meta">' + meta + '</p>' +
+      '<a class="btn-secondary mt-auto" href="' + escapeHtml(documentDownloadUrl(doc.drive_file_id)) + '" target="_blank" rel="noopener">' +
+        icon('download', 'h-4 w-4') + 'ดาวน์โหลด<span class="sr-only"> ' + escapeHtml(doc.title) + '</span></a>' +
+    '</article>';
+  }
+
+  const YOUTUBE_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+
+  /** renderVideoCard({ youtube_id, title, description }) โหลด iframe เมื่อกดเล่นเท่านั้น */
+  function renderVideoCard(video) {
+    const id = YOUTUBE_ID_PATTERN.test(video.youtube_id) ? video.youtube_id : '';
+    return '<article class="card card-hover overflow-hidden">' +
+      '<div class="relative aspect-video bg-navy-900" data-video-frame>' +
+        (id ? '<img src="https://i.ytimg.com/vi/' + id + '/hqdefault.jpg" alt="" loading="lazy" class="h-full w-full object-cover">' : '') +
+        '<button type="button" data-action="play-video" data-youtube-id="' + id + '" data-title="' + escapeHtml(video.title) + '" ' +
+          'class="absolute inset-0 flex items-center justify-center bg-navy-900/30 hover:bg-navy-900/10" aria-label="เล่นวิดีโอ: ' + escapeHtml(video.title) + '">' +
+          '<span class="flex h-14 w-14 items-center justify-center rounded-full bg-gold-500 text-navy-900 shadow-md">' + icon('play', 'h-6 w-6') + '</span>' +
+        '</button>' +
+      '</div>' +
+      '<div class="p-4">' +
+        '<h3 class="heading-3 line-clamp-2">' + escapeHtml(video.title) + '</h3>' +
+        (video.description ? '<p class="mt-1 text-meta line-clamp-2">' + escapeHtml(video.description) + '</p>' : '') +
+      '</div>' +
+    '</article>';
+  }
+
+  document.addEventListener('click', event => {
+    const play = event.target.closest('[data-action="play-video"]');
+    if (!play || !YOUTUBE_ID_PATTERN.test(play.dataset.youtubeId)) return;
+    const frame = play.closest('[data-video-frame]');
+    const iframe = document.createElement('iframe');
+    iframe.src = 'https://www.youtube-nocookie.com/embed/' + play.dataset.youtubeId + '?autoplay=1&rel=0';
+    iframe.title = play.dataset.title || 'วิดีโอ';
+    iframe.className = 'absolute inset-0 h-full w-full';
+    iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+    iframe.allowFullscreen = true;
+    frame.innerHTML = '';
+    frame.appendChild(iframe);
+  });
+</script>
