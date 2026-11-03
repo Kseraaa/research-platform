@@ -1,0 +1,267 @@
+<!-- js_app.html: callServer, router (google.script.history), state/session, util (escapeHtml, formatThaiDate) -->
+<script>
+  // ---------- เรียก server ----------
+
+  /**
+   * เรียก public API ฝั่ง server คืน Promise ของ data (reject เป็น Error ข้อความภาษาไทย)
+   */
+  function callServer(fn, ...args) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(res => res && res.ok ? resolve(res.data) : reject(new Error(res ? res.error : 'ไม่มีการตอบกลับ')))
+        .withFailureHandler(() => reject(new Error('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่')))
+        [fn](...args);
+    });
+  }
+
+  // ---------- util ----------
+
+  const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+  /** escape ข้อความก่อนใส่ใน innerHTML ทุกครั้ง */
+  function escapeHtml(value) {
+    return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, ch => HTML_ESCAPES[ch]);
+  }
+
+  const THAI_MONTHS_SHORT = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000; // ไทยไม่มี daylight saving
+
+  /**
+   * แปลง ISO string เป็นวันที่ไทย พ.ศ. ตามเวลา Asia/Bangkok (ไม่ขึ้นกับเขตเวลาของเครื่องผู้ใช้)
+   * formatThaiDate('2026-11-03T13:20:00+07:00') → '3 พ.ย. 2569'
+   * formatThaiDate(..., { withTime: true }) → '3 พ.ย. 2569 13:20 น.'
+   */
+  function formatThaiDate(value, options) {
+    if (!value) return '';
+    const date = value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime())) return '';
+    const bkk = new Date(date.getTime() + BANGKOK_OFFSET_MS);
+    let text = bkk.getUTCDate() + ' ' + THAI_MONTHS_SHORT[bkk.getUTCMonth()] + ' ' + (bkk.getUTCFullYear() + 543);
+    if (options && options.withTime) {
+      const pad = n => String(n).padStart(2, '0');
+      text += ' ' + pad(bkk.getUTCHours()) + ':' + pad(bkk.getUTCMinutes()) + ' น.';
+    }
+    return text;
+  }
+
+  // ---------- state + session ----------
+
+  const SESSION_STORAGE_KEY = 'rp_session';
+
+  const appState = {
+    session: null,          // { token, email, role, name } หลังล็อกอิน
+    registrationOpen: false, // ตั้งค่าจาก getHomeData ในเฟส 1
+    route: null
+  };
+
+  function loadSession() {
+    try {
+      const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+      appState.session = raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      appState.session = null;
+    }
+  }
+
+  function setSession(session) {
+    appState.session = session;
+    try { sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session)); } catch (e) {}
+    renderChrome();
+  }
+
+  function clearSession() {
+    appState.session = null;
+    try { sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch (e) {}
+    renderChrome();
+  }
+
+  function hasRole(roles) {
+    return !roles || Boolean(appState.session && roles.indexOf(appState.session.role) !== -1);
+  }
+
+  // ---------- route + เมนู (ดู docs/DESIGN.md ข้อ 5) ----------
+
+  /** roles: null = ทุกคน */
+  const ROUTES = {
+    home:       { title: 'หน้าหลัก', roles: null },
+    timeline:   { title: 'Timeline', roles: null },
+    news:       { title: 'ข่าวประชาสัมพันธ์', roles: null },
+    documents:  { title: 'ดาวน์โหลดเอกสาร', roles: null },
+    videos:     { title: 'วิดีโอการสอน', roles: null },
+    register:   { title: 'ลงทะเบียนนำเสนอ', roles: null },
+    track:      { title: 'ติดตามสถานะ', roles: null },
+    login:      { title: 'เข้าสู่ระบบ', roles: null },
+    library:    { title: 'คลังงานวิจัย', roles: ['teacher', 'admin'] },
+    teacher:    { title: 'ส่งงานวิจัย / งานของฉัน', roles: ['teacher'] },
+    admin:      { title: 'จัดการระบบ', roles: ['reviewer', 'admin'] },
+    styleguide: { title: 'Styleguide', roles: ['admin'] } // เฟส 0.5: เปิดได้บน Test deployment ด้วย
+  };
+
+  const NAV_ROUTES = ['home', 'timeline', 'news', 'documents', 'videos', 'library'];
+  const USER_MENU_ROUTES = ['teacher', 'admin'];
+
+  /** หน้าที่ลงทะเบียนจาก page_*.html: { render(container, params) } */
+  const pages = {};
+  let renderSeq = 0;
+
+  /**
+   * ลงทะเบียนหน้า เรียกจาก page_*.html
+   * registerPage('home', { render(container, params) { ... } })
+   */
+  function registerPage(name, page) {
+    pages[name] = page;
+  }
+
+  /** clone <template id="tpl-xxx"> ของหน้า */
+  function cloneTemplate(id) {
+    const tpl = document.getElementById(id);
+    return tpl ? tpl.content.cloneNode(true) : document.createDocumentFragment();
+  }
+
+  function toQuery(state) {
+    const query = {};
+    Object.keys(state).forEach(key => {
+      if (state[key] !== undefined && state[key] !== null && state[key] !== '') query[key] = String(state[key]);
+    });
+    return query;
+  }
+
+  /**
+   * เปลี่ยนหน้าโดยไม่ reload: navigate('news', { id: 'NEWS-xxxx' })
+   */
+  function navigate(page, params, options) {
+    const state = Object.assign({}, params || {}, { page: page });
+    const history = window.google && google.script && google.script.history;
+    if (history) {
+      if (options && options.replace) history.replace(state, toQuery(state));
+      else history.push(state, toQuery(state));
+    }
+    renderRoute(state);
+  }
+
+  function renderRoute(state) {
+    const params = Object.assign({}, state || {});
+    const name = ROUTES[params.page] ? params.page : 'home';
+    const route = ROUTES[name];
+
+    if (!hasRole(route.roles)) {
+      if (!appState.session) {
+        navigate('login', { next: name }, { replace: true });
+        return;
+      }
+      appState.route = name;
+      renderChrome();
+      renderMessage('คุณไม่มีสิทธิ์เข้าถึงหน้านี้', 'กลับไปหน้าหลักหรือเข้าสู่ระบบด้วยบัญชีอื่น');
+      return;
+    }
+
+    appState.route = name;
+    renderChrome();
+
+    const container = document.getElementById('app');
+    const seq = ++renderSeq;
+    container.innerHTML = '';
+    window.scrollTo(0, 0);
+
+    const page = pages[name];
+    if (!page) {
+      renderMessage(route.title, 'หน้านี้อยู่ระหว่างพัฒนา');
+      return;
+    }
+
+    Promise.resolve()
+      .then(() => page.render(container, params, () => seq === renderSeq))
+      .then(() => { if (seq === renderSeq) refreshIcons(); })
+      .catch(err => {
+        if (seq !== renderSeq) return;
+        console.error(err);
+        renderMessage('เกิดข้อผิดพลาด', err && err.message ? err.message : 'กรุณาลองใหม่อีกครั้ง');
+      });
+  }
+
+  /** ข้อความกลางหน้าแบบง่าย (empty/error state เต็มรูปแบบอยู่ใน js_ui.html เฟส 0.5) */
+  function renderMessage(title, detail) {
+    const container = document.getElementById('app');
+    container.innerHTML =
+      '<section class="mx-auto max-w-content px-4 md:px-6 py-12 md:py-20 text-center">' +
+        '<h1 class="font-heading text-2xl md:text-3xl font-bold">' + escapeHtml(title) + '</h1>' +
+        '<p class="mt-2 text-ink-muted">' + escapeHtml(detail) + '</p>' +
+        '<a href="#" data-route="home" class="mt-6 inline-flex items-center min-h-[44px] px-4 rounded-md text-navy-500 underline">กลับหน้าหลัก</a>' +
+      '</section>';
+  }
+
+  function refreshIcons() {
+    if (window.lucide) lucide.createIcons();
+  }
+
+  // ---------- header: เมนูหลัก + เมนูผู้ใช้ ----------
+
+  const NAV_LINK_CLASS = 'inline-flex items-center min-h-[44px] px-3 rounded-md text-navy-100 hover:text-white hover:bg-navy-700';
+  const NAV_LINK_ACTIVE_CLASS = 'inline-flex items-center min-h-[44px] px-3 rounded-md text-white bg-navy-700 font-medium';
+
+  function navLinkHtml(name) {
+    const active = appState.route === name;
+    return '<a href="#" data-route="' + name + '" class="' + (active ? NAV_LINK_ACTIVE_CLASS : NAV_LINK_CLASS) + '"' +
+      (active ? ' aria-current="page"' : '') + '>' + escapeHtml(ROUTES[name].title) + '</a>';
+  }
+
+  function renderChrome() {
+    const navList = document.getElementById('nav-list');
+    navList.innerHTML = NAV_ROUTES
+      .filter(name => hasRole(ROUTES[name].roles))
+      .map(name => '<li>' + navLinkHtml(name) + '</li>')
+      .join('');
+
+    const userMenu = document.getElementById('user-menu');
+    let html = '';
+    if (appState.registrationOpen) {
+      html += '<a href="#" data-route="register" class="inline-flex items-center min-h-[44px] px-4 rounded-md bg-gold-500 text-navy-900 font-semibold">ลงทะเบียนนำเสนอ</a>';
+    }
+    if (appState.session) {
+      html += USER_MENU_ROUTES.filter(name => hasRole(ROUTES[name].roles)).map(navLinkHtml).join('');
+      html += '<span class="text-sm text-navy-100">' + escapeHtml(appState.session.name || appState.session.email) + '</span>';
+      html += '<button type="button" data-action="logout" class="' + NAV_LINK_CLASS + '">ออกจากระบบ</button>';
+    } else {
+      html += navLinkHtml('login');
+    }
+    userMenu.innerHTML = html;
+  }
+
+  // ---------- เริ่มทำงาน ----------
+
+  function readInitialParams() {
+    try {
+      const params = JSON.parse(document.body.dataset.params || '{}');
+      return params && typeof params === 'object' ? params : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function startApp() {
+    loadSession();
+
+    document.addEventListener('click', event => {
+      const link = event.target.closest('[data-route]');
+      if (link) {
+        event.preventDefault();
+        navigate(link.dataset.route);
+        return;
+      }
+      const logout = event.target.closest('[data-action="logout"]');
+      if (logout) {
+        // เฟส 4: เรียก callServer('logout', token) ก่อนล้าง session
+        clearSession();
+        navigate('home');
+      }
+    });
+
+    const history = window.google && google.script && google.script.history;
+    if (history) {
+      history.setChangeHandler(e => renderRoute(e.state || e.location.parameter));
+    }
+
+    const initial = readInitialParams();
+    navigate(initial.page || 'home', initial, { replace: true });
+  }
+</script>

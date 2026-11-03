@@ -1,0 +1,37 @@
+<!-- css_main.html: Tailwind CDN + design tokens ตาม docs/DESIGN.md ข้อ 2 + style พื้นฐาน (class component เพิ่มในเฟส 0.5) -->
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          navy:  { 50:'#EEF3F8', 100:'#D5E1EC', 200:'#A9C2D8', 500:'#1F4E79', 700:'#123A5C', 800:'#0D2F4B', 900:'#082238' },
+          gold:  { 50:'#FBF6E7', 100:'#F5E9C2', 400:'#D9B44A', 500:'#C9A22F', 700:'#8A6A12' },
+          ink:   { DEFAULT:'#1C2430', muted:'#4A5565', subtle:'#6B7480' },
+          line:  '#E3E7ED',
+          surface: { DEFAULT:'#FFFFFF', alt:'#F5F7FA' },
+          success: { bg:'#E8F5EE', fg:'#1E6B43' },
+          warning: { bg:'#FFF4E0', fg:'#8A5300' },
+          danger:  { bg:'#FDECEC', fg:'#A12A2A' },
+          info:    { bg:'#EAF2FB', fg:'#1F4E79' }
+        },
+        fontFamily: {
+          heading: ['"Noto Serif Thai"', 'serif'],
+          sans: ['"Noto Sans Thai"', 'system-ui', 'sans-serif']
+        },
+        maxWidth: { content: '1200px' },
+        borderRadius: { card: '12px' }
+      }
+    }
+  };
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600&family=Noto+Serif+Thai:wght@600;700&display=swap" rel="stylesheet">
+<style type="text/tailwindcss">
+  @layer base {
+    h1, h2, h3 { text-wrap: balance; }
+    :focus-visible { @apply outline outline-2 outline-offset-2 outline-navy-500; }
+    .bg-navy-800 :focus-visible { @apply outline-gold-400; }
+  }
+</style>

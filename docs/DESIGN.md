@@ -14,10 +14,10 @@
 
 ## 2. Design tokens
 
-ใส่ใน `index.html` ผ่าน `tailwind.config` ของ Tailwind CDN:
+ใส่ใน `css_main.html` ผ่าน `tailwind.config` ของ Tailwind CDN (ไฟล์นี้ include เข้า `<head>` ของ `index.html`) ล็อกเวอร์ชัน CDN เสมอ ห้ามใช้ `@latest`:
 
 ```html
-<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <script>
 tailwind.config = {
   theme: {
@@ -102,7 +102,7 @@ tailwind.config = {
 | **Video card** | ภาพปก YouTube (`i.ytimg.com/vi/{id}/hqdefault.jpg`) + ปุ่มเล่น โหลด iframe เมื่อกดเท่านั้น |
 | **Pagination** | ก่อนหน้า / เลขหน้า / ถัดไป |
 
-ไอคอน: Lucide ผ่าน CDN (`https://unpkg.com/lucide@latest`) ใช้แบบเส้นเท่านั้น
+ไอคอน: Lucide ผ่าน CDN แบบล็อกเวอร์ชัน (`https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js`) ใช้แบบเส้นเท่านั้น ใส่ `<i data-lucide="ชื่อไอคอน">` แล้วเรียก `lucide.createIcons()` หลัง render
 
 ## 4. สีของสถานะงาน
 

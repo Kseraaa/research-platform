@@ -15,7 +15,7 @@
 ### 2.1 ครูส่งงานวิจัย (`type = teacher`)
 - ล็อกอินด้วย OTP ก่อน (ข้อมูลชื่อ/อีเมลดึงจากบัญชี)
 - กรอก: ชื่อเรื่อง, ผู้วิจัย (หลายคนได้), กลุ่มสาระ/สาขา, บทคัดย่อสั้น, ปีการศึกษา
-- แนบไฟล์: **PDF และ/หรือ Word อย่างน้อย 1 ไฟล์**
+- แนบไฟล์: **บังคับทั้ง PDF และ Word** (`research_pdf` + `research_docx`)
 - **ต้องเลือก** "อนุญาตให้เผยแพร่ในคลังงานวิจัยของโรงเรียน" ใช่ / ไม่ใช่ (ไม่มีค่า default ต้องเลือกเอง)
 - ส่งแล้วได้อีเมลยืนยัน
 
@@ -87,6 +87,18 @@ draft ──► submitted ──► under_review ──► accepted
                              ▼
                     revision_requested ──► resubmitted ──► under_review
 ```
+
+**งานครู (`type = teacher`)** ใช้ `recorded` เป็นผลลัพธ์แทน `accepted`:
+
+```
+draft ──► submitted ──► recorded                  (บันทึกเข้าคลังได้ทันทีโดยไม่ต้องตรวจ)
+              └──► under_review ──► recorded
+                        ├──► rejected
+                        ▼
+              revision_requested ──► resubmitted ──► under_review
+```
+
+transition ที่อนุญาตทั้งหมดอยู่ใน `ALLOWED_TRANSITIONS` ใน `config.gs`
 
 | status | ความหมาย (แสดงผลภาษาไทย) | ใครเปลี่ยน | ส่งอีเมล |
 |---|---|---|---|

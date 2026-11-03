@@ -124,7 +124,7 @@ NEWS (ไม่มีความสัมพันธ์)
 
 | column | type | หมายเหตุ |
 |---|---|---|
-| `timeline_id` | string PK | |
+| `timeline_id` | string PK | `TL-` + 8 ตัวแรกของ UUID |
 | `event_id` | string FK | |
 | `title` | string | |
 | `start_date` | datetime | |
@@ -136,7 +136,7 @@ NEWS (ไม่มีความสัมพันธ์)
 
 | column | type | หมายเหตุ |
 |---|---|---|
-| `category_id` | string PK | |
+| `category_id` | string PK | `VCAT-` + เลข 2 หลัก เช่น `VCAT-01` |
 | `name` | string | |
 | `description` | string | |
 | `sort_order` | number | |
@@ -145,7 +145,7 @@ NEWS (ไม่มีความสัมพันธ์)
 
 | column | type | หมายเหตุ |
 |---|---|---|
-| `video_id` | string PK | |
+| `video_id` | string PK | `VID-` + 8 ตัวแรกของ UUID |
 | `category_id` | string FK | |
 | `title` | string | |
 | `youtube_id` | string | เก็บแค่ id เช่น `dQw4w9WgXcQ` ไม่ใช่ URL เต็ม |

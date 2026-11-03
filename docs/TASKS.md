@@ -7,12 +7,12 @@
 
 ## เฟส 0: โครงโปรเจกต์
 
-- [ ] สร้าง `src/` ตามโครงใน `docs/ARCHITECTURE.md` ข้อ 2 (ไฟล์ว่างพร้อมคอมเมนต์หน้าที่)
-- [ ] `config.gs`: `getConfig_()`, enum (`ROLES`, `SUBMISSION_TYPES`, `STATUSES`, `FILE_KINDS`, `REQUIRED_FILES`), ข้อความสถานะภาษาไทย
-- [ ] `db.gs`: helper อ่าน/เขียนตามชื่อคอลัมน์ + `withLock_()`
-- [ ] `setup.gs`: `SCHEMA` ตาม `docs/DATABASE.md` + `setup()` สร้างสเปรดชีต แท็บ หัวคอลัมน์ (ตัวหนา, freeze แถว 1) โฟลเดอร์ Drive แล้วบันทึก ID ลง Script Properties (รันซ้ำได้โดยไม่สร้างซ้ำ)
-- [ ] `Code.gs`: `doGet`, `include`, `wrapApi_`, `userError_`
-- [ ] `index.html` + `js_app.html`: layout ภาษาไทย, nav, router, `callServer`, `escapeHtml`, `formatThaiDate`
+- [x] สร้าง `src/` ตามโครงใน `docs/ARCHITECTURE.md` ข้อ 2 (ไฟล์ว่างพร้อมคอมเมนต์หน้าที่)
+- [x] `config.gs`: `getConfig_()`, enum (`ROLES`, `SUBMISSION_TYPES`, `STATUSES`, `FILE_KINDS`, `REQUIRED_FILES`), ข้อความสถานะภาษาไทย
+- [x] `db.gs`: helper อ่าน/เขียนตามชื่อคอลัมน์ + `withLock_()`
+- [x] `setup.gs`: `SCHEMA` ตาม `docs/DATABASE.md` + `setup()` สร้างสเปรดชีต แท็บ หัวคอลัมน์ (ตัวหนา, freeze แถว 1) โฟลเดอร์ Drive แล้วบันทึก ID ลง Script Properties (รันซ้ำได้โดยไม่สร้างซ้ำ)
+- [x] `Code.gs`: `doGet`, `include`, `wrapApi_`, `userError_`
+- [x] `index.html` + `js_app.html`: layout ภาษาไทย, nav, router, `callServer`, `escapeHtml`, `formatThaiDate`
 
 > **Prompt:** อ่าน CLAUDE.md และ docs/ ทั้งหมด แล้วทำเฟส 0 ใน docs/TASKS.md ให้ครบ เริ่มจาก config.gs, db.gs, setup.gs ก่อน แล้วค่อย Code.gs และ SPA shell บอกฉันว่าต้องรัน setup() และตั้ง Script Properties อะไรบ้าง
 
