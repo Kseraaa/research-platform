@@ -166,3 +166,91 @@ function clearSampleData() {
 function pad2_(n) {
   return String(n).padStart(2, '0');
 }
+
+// ---------- test การส่งงาน (ไม่แตะ Drive/Sheets) ----------
+
+/**
+ * รันใน editor: ตรวจไฟล์ (ไม่ครบ / ชนิดผิด / ขนาดเกิน / magic bytes) และ payload ฟอร์มลงทะเบียน
+ * ผลลัพธ์ดูใน Execution log ถ้ามีข้อใดไม่ผ่านจะ throw ตอนท้าย
+ */
+function runSubmissionTests() {
+  const results = [];
+  const test = (name, fn) => {
+    try {
+      fn();
+      results.push('ผ่าน  ' + name);
+    } catch (e) {
+      results.push('ไม่ผ่าน ' + name + ' → ' + (e && e.message));
+    }
+  };
+  const expectError = (fn, pattern) => {
+    try {
+      fn();
+    } catch (e) {
+      if (pattern && !pattern.test(e.userMessage || '')) throw new Error('error ไม่ตรง: ' + (e.userMessage || e.message));
+      return;
+    }
+    throw new Error('ควร error แต่ไม่ error');
+  };
+  const pdf = Utilities.base64Encode('%PDF-1.4 ตัวอย่างไฟล์ PDF');
+  const docx = Utilities.base64Encode([0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x06, 0x00]);
+  const pdfMime = FILE_KIND_SPECS.paper_pdf.mime;
+  const docxMime = FILE_KIND_SPECS.paper_docx.mime;
+
+  // ไฟล์ไม่ครบ
+  test('oral ขาด paper_docx', () => {
+    const missing = findMissingFiles_('oral', ['paper_pdf']);
+    if (missing.join() !== 'paper_docx') throw new Error('ได้ ' + missing.join());
+  });
+  test('poster ไม่มีไฟล์เลย ขาด 3 ไฟล์', () => {
+    if (findMissingFiles_('poster', []).length !== 3) throw new Error('จำนวนไม่ถูก');
+  });
+  test('teacher ครบทั้ง PDF และ Word', () => {
+    if (findMissingFiles_('teacher', ['research_pdf', 'research_docx']).length !== 0) throw new Error('ไม่ควรขาด');
+  });
+
+  // ไฟล์ถูกต้อง
+  test('PDF ถูกต้องผ่าน', () => validateUploadedFile_('oral', 'paper_pdf', 'paper.PDF', pdfMime, pdf, 20));
+  test('DOCX ถูกต้องผ่าน (MIME ว่าง)', () => validateUploadedFile_('oral', 'paper_docx', 'paper.docx', '', docx, 20));
+
+  // ชนิดผิด
+  test('นามสกุลผิด (.doc)', () => expectError(() => validateUploadedFile_('oral', 'paper_docx', 'paper.doc', docxMime, docx, 20), /Word/));
+  test('MIME ผิด (image/png)', () => expectError(() => validateUploadedFile_('oral', 'paper_pdf', 'paper.pdf', 'image/png', pdf, 20), /PDF/));
+  test('เปลี่ยนนามสกุล docx เป็น .pdf (magic bytes ไม่ตรง)', () => expectError(() => validateUploadedFile_('oral', 'paper_pdf', 'fake.pdf', pdfMime, docx, 20), /เนื้อไฟล์/));
+  test('file_kind ไม่ใช่ของประเภทนี้ (poster_pdf ใน oral)', () => expectError(() => validateUploadedFile_('oral', 'poster_pdf', 'p.pdf', pdfMime, pdf, 20), /ไม่รู้จัก/));
+  test('ไม่มีข้อมูลไฟล์', () => expectError(() => validateUploadedFile_('oral', 'paper_pdf', 'p.pdf', pdfMime, '', 20), /ไม่พบข้อมูล/));
+
+  // ขนาดเกิน
+  const bigPdf = Utilities.base64Encode('%PDF' + new Array(3000).join('x'));
+  test('ขนาดเกิน (ตั้งเพดาน 0.001 MB)', () => expectError(() => validateUploadedFile_('oral', 'paper_pdf', 'big.pdf', pdfMime, bigPdf, 0.001), /ใหญ่เกิน/));
+
+  // payload ฟอร์ม
+  const goodPayload = {
+    type: 'poster', full_name: ' สมชาย ใจดี ', email: 'Somchai@Example.com', phone: '081-234-5678',
+    organization: 'โรงเรียนตัวอย่าง', title: 'ชื่อเรื่อง', co_authors: ['ผู้ร่วม 1', ' ', 'ผู้ร่วม 2'],
+    subject_area: 'คณิตศาสตร์', pdpa_consent: true, allow_publish: false
+  };
+  test('payload ถูกต้อง ทำความสะอาดค่า', () => {
+    const data = validateRegistrationPayload_(goodPayload);
+    if (data.email !== 'somchai@example.com' || data.full_name !== 'สมชาย ใจดี' || data.co_authors.length !== 2) {
+      throw new Error(JSON.stringify(data));
+    }
+  });
+  test('ไม่ยินยอม PDPA', () => expectError(() => validateRegistrationPayload_(Object.assign({}, goodPayload, { pdpa_consent: false })), /ยินยอม/));
+  test('ไม่ได้เลือก allow_publish', () => expectError(() => validateRegistrationPayload_(Object.assign({}, goodPayload, { allow_publish: null })), /เผยแพร่/));
+  test('อีเมลผิดรูปแบบ', () => expectError(() => validateRegistrationPayload_(Object.assign({}, goodPayload, { email: 'abc' })), /อีเมล/));
+  test('ประเภท teacher ส่งผ่านฟอร์มภายนอกไม่ได้', () => expectError(() => validateRegistrationPayload_(Object.assign({}, goodPayload, { type: 'teacher' })), /รูปแบบ/));
+  test('payload ไม่ใช่ object', () => expectError(() => validateRegistrationPayload_('junk'), /กรุณา/));
+
+  // ช่วงเปิดรับ
+  test('ช่วงเปิดรับ: ก่อนเปิด / ระหว่าง / หลังปิด', () => {
+    const event = { open_date: '2026-11-01T00:00:00+07:00', close_date: '2026-11-30T23:59:59+07:00' };
+    const at = iso => isRegistrationOpen_(event, new Date(iso));
+    if (at('2026-10-31T23:59:00+07:00') || !at('2026-11-15T12:00:00+07:00') || at('2026-12-01T00:00:00+07:00')) throw new Error('ช่วงเวลาไม่ถูก');
+  });
+
+  console.log(results.join('\n'));
+  const failed = results.filter(r => r.indexOf('ไม่ผ่าน') === 0).length;
+  if (failed) throw new Error('ไม่ผ่าน ' + failed + ' จาก ' + results.length + ' ข้อ');
+  return 'ผ่านทั้งหมด ' + results.length + ' ข้อ';
+}

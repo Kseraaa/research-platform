@@ -1,1 +1,385 @@
-<!-- page_register.html: ฟอร์มลงทะเบียน Oral/Poster (เฟส 2) -->
+<!-- page_register.html: ลงทะเบียนนำเสนอ Oral/Poster (stepper 4 ขั้น + หน้าส่งสำเร็จ) ดู docs/DESIGN.md ข้อ 6
+     flow ฝั่ง server: createSubmission → uploadFile ทีละไฟล์ → finalizeSubmission (docs/ARCHITECTURE.md ข้อ 6) -->
+<script>
+  registerPage('register', {
+    render(container, params, isCurrent) {
+      const STEPS = ['ข้อมูลผู้สมัคร', 'ผลงาน', 'อัปโหลดไฟล์', 'ตรวจสอบและส่ง'];
+      const FORMATS = {
+        oral: { title: 'Oral (นำเสนอปากเปล่า)', description: 'นำเสนอบนเวที ไฟล์ที่ต้องส่ง' },
+        poster: { title: 'Poster', description: 'นำเสนอด้วยโปสเตอร์ ไฟล์ที่ต้องส่ง' }
+      };
+      const reg = {
+        step: 1,
+        info: null,
+        data: { full_name: '', email: '', phone: '', organization: '', type: '', title: '', co_authors: '', subject_area: '', pdpa: false, allow_publish: null },
+        dropzones: {},   // file_kind → dropzone (เก็บไว้ข้ามขั้น ไฟล์จึงไม่หาย)
+        submission: null, // { submissionId, uploadKey } หลังสร้างงานบน server แล้ว
+        done: {},        // file_kind ที่อัปโหลดสำเร็จแล้ว
+        submitting: false
+      };
+
+      container.innerHTML = renderPageHero({ title: 'ลงทะเบียนนำเสนอผลงาน', description: 'สำหรับครูและบุคลากรทางการศึกษาจากหน่วยงานภายนอก' }) +
+        '<section class="container-content section"><div class="mx-auto max-w-3xl" data-reg="root"></div></section>';
+      const heroText = container.querySelector('section p.text-navy-100');
+      const root = container.querySelector('[data-reg="root"]');
+      const $ = name => root.querySelector('[data-reg="' + name + '"]');
+
+      const fileLabels = type => ((appConfig.requiredFiles || {})[type] || []).map(kind => ((appConfig.fileKinds || {})[kind] || {}).label || kind);
+      const safeUrl = url => /^https?:\/\//i.test(url || '') ? url : '';
+
+      // ---------- โครงฟอร์ม ----------
+
+      function renderShell() {
+        root.innerHTML =
+          '<div data-reg="alert" class="mb-4"></div>' +
+          '<div data-reg="stepper"></div>' +
+          '<form class="card mt-6 p-5 md:p-8" novalidate data-reg="form">' +
+            '<h2 class="heading-3 outline-none" tabindex="-1" data-reg="step-title"></h2>' +
+            '<div class="mt-6 flex flex-col gap-6" data-reg="body"></div>' +
+            '<div class="mt-8 flex flex-col-reverse gap-3 border-t border-line pt-6 sm:flex-row sm:justify-between">' +
+              '<button type="button" class="btn-secondary" data-reg="back">' + icon('arrow-left', 'h-4 w-4') + 'ย้อนกลับ</button>' +
+              '<button type="submit" class="btn-primary" data-reg="next"></button>' +
+            '</div>' +
+          '</form>';
+        $('form').addEventListener('submit', event => {
+          event.preventDefault();
+          if (reg.step < STEPS.length) goNext();
+          else submit();
+        });
+        $('back').addEventListener('click', () => { collect(); showStep(reg.step - 1); });
+      }
+
+      function showStep(step) {
+        reg.step = step;
+        showAlert('');
+        $('stepper').innerHTML = renderStepper(STEPS, step);
+        $('step-title').textContent = 'ขั้นที่ ' + step + ': ' + STEPS[step - 1];
+        const body = $('body');
+        body.innerHTML = '';
+        [null, renderStep1, renderStep2, renderStep3, renderStep4][step](body);
+
+        const locked = Boolean(reg.submission);
+        $('back').hidden = step === 1 || locked;
+        const next = $('next');
+        next.className = step === STEPS.length ? 'btn-primary btn-lg' : 'btn-primary';
+        next.innerHTML = step === STEPS.length ? 'ส่งผลงาน' : 'ถัดไป' + icon('arrow-right', 'h-4 w-4');
+        refreshIcons();
+        root.scrollIntoView({ block: 'start' });
+        $('step-title').focus({ preventScroll: true });
+      }
+
+      function showAlert(type, message, title) {
+        $('alert').innerHTML = type ? renderAlert(type, message, title) : '';
+        refreshIcons();
+      }
+
+      // ---------- แต่ละขั้น ----------
+
+      function renderStep1(body) {
+        const d = reg.data;
+        body.innerHTML =
+          renderField({ id: 'reg-full_name', label: 'ชื่อ-นามสกุล', required: true, value: d.full_name, autocomplete: 'name', maxlength: 200 }) +
+          renderField({ id: 'reg-email', label: 'อีเมล', type: 'email', required: true, value: d.email, autocomplete: 'email', maxlength: 254,
+            help: 'เราจะส่งรหัสงานและลิงก์ติดตามสถานะไปที่อีเมลนี้' }) +
+          renderField({ id: 'reg-phone', label: 'เบอร์โทร', type: 'tel', required: true, value: d.phone, autocomplete: 'tel', inputmode: 'tel', maxlength: 30 }) +
+          renderField({ id: 'reg-organization', label: 'หน่วยงาน / สถานศึกษา', required: true, value: d.organization, autocomplete: 'organization', maxlength: 200 });
+      }
+
+      function renderStep2(body) {
+        const d = reg.data;
+        body.innerHTML =
+          '<fieldset class="field" data-reg="format">' +
+            '<legend class="field-label mb-1">รูปแบบการนำเสนอ <span class="field-required" aria-hidden="true">*</span></legend>' +
+            '<div class="choice-group">' +
+              ['oral', 'poster'].map(type => renderRadioCard({
+                name: 'reg-type', value: type, title: FORMATS[type].title, description: FORMATS[type].description,
+                items: fileLabels(type), checked: d.type === type, required: true
+              })).join('') +
+            '</div>' +
+            '<div data-reg="template" class="mt-2"></div>' +
+          '</fieldset>' +
+          renderField({ id: 'reg-title', label: 'ชื่อเรื่อง', required: true, value: d.title, maxlength: 300 }) +
+          renderField({ id: 'reg-co_authors', label: 'ผู้ร่วมวิจัย', multiline: true, value: d.co_authors,
+            help: 'หนึ่งชื่อต่อบรรทัด ไม่ต้องใส่ชื่อของคุณ (ไม่เกิน 10 คน) ไม่มีให้เว้นว่าง' }) +
+          renderField({ id: 'reg-subject_area', label: 'สาขา / กลุ่มสาระ', required: true, value: d.subject_area, maxlength: 100,
+            placeholder: 'เช่น คณิตศาสตร์, วิทยาศาสตร์, ภาษาไทย' });
+
+        const updateTemplate = () => {
+          const type = (body.querySelector('input[name="reg-type"]:checked') || {}).value;
+          const url = type && safeUrl(reg.info.templates[type]);
+          $('template').innerHTML = !type ? ''
+            : url
+              ? '<a class="link inline-flex items-center gap-1" href="' + escapeHtml(url) + '" target="_blank" rel="noopener">' + icon('download', 'h-4 w-4') +
+                  'ดาวน์โหลดแบบฟอร์ม Word สำหรับ ' + (type === 'oral' ? 'Oral' : 'Poster') + '</a>'
+              : '<p class="text-meta">แบบฟอร์ม Word สำหรับ ' + (type === 'oral' ? 'Oral' : 'Poster') + ' ยังไม่เปิดให้ดาวน์โหลด กรุณาติดต่อหน่วยส่งเสริมงานวิจัย</p>';
+          refreshIcons();
+        };
+        body.querySelectorAll('input[name="reg-type"]').forEach(input => input.addEventListener('change', updateTemplate));
+        updateTemplate();
+      }
+
+      function getDropzone(kind) {
+        if (!reg.dropzones[kind]) {
+          reg.dropzones[kind] = createDropzone({
+            fileKind: kind,
+            required: true,
+            onChange: () => { delete reg.done[kind]; },
+            onRetry: () => submit()
+          });
+        }
+        return reg.dropzones[kind];
+      }
+
+      function renderStep3(body) {
+        body.innerHTML = '<p class="text-meta">ต้องส่งครบทุกไฟล์ ไฟล์ Word ต้องจัดรูปแบบตามแบบฟอร์มที่กำหนด</p>';
+        const grid = document.createElement('div');
+        grid.className = 'flex flex-col gap-4';
+        (appConfig.requiredFiles[reg.data.type] || []).forEach(kind => grid.appendChild(getDropzone(kind).element));
+        body.appendChild(grid);
+      }
+
+      function summaryRow(label, value) {
+        // grid-cols-[minmax(0,1fr)] + overflow-wrap:anywhere ให้อีเมล/ชื่อยาวๆ ตัดบรรทัดแทนที่จะดันหน้าจนล้น
+        return '<div class="grid grid-cols-[minmax(0,1fr)] gap-1 py-2 sm:grid-cols-[160px_minmax(0,1fr)] sm:gap-4">' +
+          '<dt class="text-sm font-medium text-ink-muted">' + escapeHtml(label) + '</dt>' +
+          '<dd class="[overflow-wrap:anywhere]">' + (value ? escapeHtml(value) : '<span class="text-ink-muted">-</span>') + '</dd></div>';
+      }
+
+      function summarySection(title, step, rows) {
+        return '<section class="rounded-card border border-line p-4">' +
+          '<div class="flex items-center justify-between gap-2">' +
+            '<h3 class="font-semibold">' + escapeHtml(title) + '</h3>' +
+            (reg.submission ? '' : '<button type="button" class="btn-ghost -my-2" data-goto="' + step + '">แก้ไข<span class="sr-only"> ' + escapeHtml(title) + '</span></button>') +
+          '</div>' +
+          '<dl class="mt-2 divide-y divide-line">' + rows.join('') + '</dl></section>';
+      }
+
+      function renderStep4(body) {
+        const d = reg.data;
+        const coAuthors = splitLines(d.co_authors);
+        body.innerHTML =
+          summarySection('ข้อมูลผู้สมัคร', 1, [
+            summaryRow('ชื่อ-นามสกุล', d.full_name), summaryRow('อีเมล', d.email),
+            summaryRow('เบอร์โทร', d.phone), summaryRow('หน่วยงาน', d.organization)
+          ]) +
+          summarySection('ผลงาน', 2, [
+            summaryRow('รูปแบบ', FORMATS[d.type].title), summaryRow('ชื่อเรื่อง', d.title),
+            summaryRow('ผู้ร่วมวิจัย', coAuthors.join(', ')), summaryRow('สาขา', d.subject_area)
+          ]) +
+          '<section class="rounded-card border border-line p-4">' +
+            '<div class="flex items-center justify-between gap-2"><h3 class="font-semibold">ไฟล์</h3>' +
+              (reg.submission ? '' : '<button type="button" class="btn-ghost -my-2" data-goto="3">แก้ไข<span class="sr-only"> ไฟล์</span></button>') + '</div>' +
+            '<div class="mt-3 flex flex-col gap-3" data-reg="files"></div>' +
+          '</section>' +
+          renderYesNo({
+            name: 'reg-allow_publish', legend: 'อนุญาตให้เผยแพร่ผลงานในคลังงานวิจัยของโรงเรียน', required: true,
+            help: 'คลังงานวิจัยเปิดให้ครูในโรงเรียนอ่านได้ (ไม่แสดงอีเมลและเบอร์โทรของคุณ)',
+            yesLabel: 'อนุญาต', noLabel: 'ไม่อนุญาต'
+          }) +
+          '<div class="field">' +
+            '<label class="flex items-start gap-3"><input type="checkbox" id="reg-pdpa" class="checkbox mt-1"' + (d.pdpa ? ' checked' : '') + '>' +
+              '<span>ข้าพเจ้ายินยอมให้หน่วยส่งเสริมงานวิจัยเก็บและใช้ข้อมูลส่วนบุคคลเพื่อการจัดกิจกรรมนำเสนอผลงาน ' +
+              '<span class="field-required" aria-hidden="true">*</span></span></label>' +
+            '<button type="button" class="link self-start pl-8 text-sm" data-reg="privacy">อ่านประกาศความเป็นส่วนตัว</button>' +
+          '</div>';
+
+        const files = $('files');
+        (appConfig.requiredFiles[d.type] || []).forEach(kind => files.appendChild(getDropzone(kind).element));
+        if (d.allow_publish !== null) {
+          const radio = body.querySelector('input[name="reg-allow_publish"][value="' + (d.allow_publish ? 'yes' : 'no') + '"]');
+          if (radio) radio.checked = true;
+        }
+        body.querySelectorAll('[data-goto]').forEach(btn => btn.addEventListener('click', () => { collect(); showStep(Number(btn.dataset.goto)); }));
+        $('privacy').addEventListener('click', () => modal({
+          title: 'ประกาศความเป็นส่วนตัว (ฉบับย่อ)',
+          content: 'หน่วยส่งเสริมงานวิจัย โรงเรียน มอ.วิทยานุสรณ์ เก็บชื่อ อีเมล เบอร์โทร หน่วยงาน และไฟล์ผลงานของคุณ ' +
+            'เพื่อใช้พิจารณาและจัดกิจกรรมนำเสนอผลงาน ติดต่อกลับ และแจ้งสถานะทางอีเมลเท่านั้น ข้อมูลติดต่อเห็นได้เฉพาะผู้ดูแลระบบ ' +
+            'คุณขอดู แก้ไข หรือลบข้อมูลได้โดยติดต่อ ' + ((appConfig.contact || {}).email || 'หน่วยส่งเสริมงานวิจัย'),
+          actions: [{ label: 'ปิด', variant: 'secondary' }]
+        }));
+      }
+
+      // ---------- เก็บค่าและตรวจ ----------
+
+      function splitLines(text) {
+        return String(text || '').split('\n').map(s => s.trim()).filter(Boolean);
+      }
+
+      /** อ่านค่าจากช่องในขั้นปัจจุบันเก็บลง reg.data */
+      function collect() {
+        const body = $('body');
+        const value = id => { const el = body.querySelector('#reg-' + id); return el ? el.value.trim() : undefined; };
+        ['full_name', 'email', 'phone', 'organization', 'title', 'co_authors', 'subject_area'].forEach(key => {
+          const v = value(key);
+          if (v !== undefined) reg.data[key] = v;
+        });
+        const type = body.querySelector('input[name="reg-type"]:checked');
+        if (type) reg.data.type = type.value;
+        const publish = body.querySelector('input[name="reg-allow_publish"]:checked');
+        if (publish) reg.data.allow_publish = publish.value === 'yes';
+        const pdpa = body.querySelector('#reg-pdpa');
+        if (pdpa) reg.data.pdpa = pdpa.checked;
+      }
+
+      /** ตรวจขั้นปัจจุบัน แสดง error ใต้ช่อง คืน true ถ้าผ่าน */
+      function validateStep() {
+        const body = $('body');
+        const d = reg.data;
+        const errors = [];
+        const fail = (el, message) => { setFieldError(el, message); errors.push(el); };
+        body.querySelectorAll('[aria-invalid="true"]').forEach(clearFieldError);
+
+        if (reg.step === 1) {
+          if (!d.full_name) fail(body.querySelector('#reg-full_name'), 'กรุณากรอกชื่อ-นามสกุล');
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email)) fail(body.querySelector('#reg-email'), 'กรุณากรอกอีเมลให้ถูกต้อง เช่น name@school.ac.th');
+          const digits = d.phone.replace(/\D/g, '');
+          if (!/^[0-9+\-\s()]+$/.test(d.phone) || digits.length < 9 || digits.length > 15) fail(body.querySelector('#reg-phone'), 'กรุณากรอกเบอร์โทร 9-10 หลัก');
+          if (!d.organization) fail(body.querySelector('#reg-organization'), 'กรุณากรอกหน่วยงานหรือสถานศึกษา');
+        } else if (reg.step === 2) {
+          if (!d.type) fail(body.querySelector('input[name="reg-type"]'), 'กรุณาเลือกรูปแบบการนำเสนอ');
+          if (!d.title) fail(body.querySelector('#reg-title'), 'กรุณากรอกชื่อเรื่อง');
+          if (splitLines(d.co_authors).length > 10) fail(body.querySelector('#reg-co_authors'), 'ผู้ร่วมวิจัยได้ไม่เกิน 10 คน');
+          if (!d.subject_area) fail(body.querySelector('#reg-subject_area'), 'กรุณากรอกสาขาหรือกลุ่มสาระ');
+        } else if (reg.step === 3 || reg.step === 4) {
+          (appConfig.requiredFiles[d.type] || []).forEach(kind => {
+            const dz = getDropzone(kind);
+            if (!dz.getFile()) { dz.setError('กรุณาเลือกไฟล์นี้'); errors.push(dz.element.querySelector('button')); }
+          });
+          if (reg.step === 4) {
+            if (d.allow_publish === null) fail(body.querySelector('input[name="reg-allow_publish"]'), 'กรุณาเลือกว่าอนุญาตให้เผยแพร่หรือไม่');
+            if (!d.pdpa) fail(body.querySelector('#reg-pdpa'), 'ต้องยินยอมก่อนจึงจะส่งผลงานได้');
+          }
+        }
+
+        if (errors.length) {
+          showAlert('danger', 'กรุณาตรวจสอบข้อมูลที่มีเครื่องหมายแจ้งเตือน (' + errors.length + ' รายการ)');
+          if (errors[0]) errors[0].focus();
+          return false;
+        }
+        return true;
+      }
+
+      function goNext() {
+        collect();
+        if (validateStep()) showStep(reg.step + 1);
+      }
+
+      // ---------- ส่ง ----------
+
+      function warnBeforeLeave(event) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+
+      function submit() {
+        if (reg.submitting) return;
+        collect();
+        if (!validateStep()) return;
+
+        const d = reg.data;
+        const button = $('next');
+        reg.submitting = true;
+        setButtonLoading(button, true, 'กำลังส่ง...');
+        $('back').hidden = true;
+        const editButtons = Array.from(root.querySelectorAll('[data-goto]'));
+        editButtons.forEach(btn => { btn.disabled = true; });
+        showAlert('info', 'กำลังอัปโหลดไฟล์ทีละไฟล์ กรุณาอย่าปิดหรือออกจากหน้านี้');
+        window.addEventListener('beforeunload', warnBeforeLeave);
+
+        const create = reg.submission
+          ? Promise.resolve(reg.submission)
+          : callServer('createSubmission', {
+              type: d.type, full_name: d.full_name, email: d.email, phone: d.phone, organization: d.organization,
+              title: d.title, co_authors: splitLines(d.co_authors), subject_area: d.subject_area,
+              pdpa_consent: d.pdpa, allow_publish: d.allow_publish
+            }).then(created => {
+              reg.submission = created;
+              root.querySelectorAll('[data-goto]').forEach(btn => btn.remove()); // ข้อมูลถูกบันทึกแล้ว แก้ไม่ได้
+              return created;
+            });
+
+        create
+          .then(created => uploadFilesInOrder({
+            submissionId: created.submissionId,
+            uploadKey: created.uploadKey,
+            items: appConfig.requiredFiles[d.type].map(kind => ({ fileKind: kind, dropzone: getDropzone(kind) })),
+            done: reg.done
+          }))
+          .then(() => callServer('finalizeSubmission', reg.submission.submissionId, reg.submission.uploadKey))
+          .then(result => {
+            window.removeEventListener('beforeunload', warnBeforeLeave);
+            if (isCurrent()) renderSuccess(result);
+          })
+          .catch(err => {
+            window.removeEventListener('beforeunload', warnBeforeLeave);
+            reg.submitting = false;
+            if (!isCurrent()) return;
+            setButtonLoading(button, false);
+            button.textContent = 'ส่งอีกครั้ง';
+            // ยังไม่ได้สร้างงานบน server (เช่น ข้อมูลไม่ผ่าน) จึงกลับไปแก้ข้อมูลได้
+            if (!reg.submission) editButtons.forEach(btn => { btn.disabled = false; });
+            showAlert('danger', err.message, reg.submission ? 'ส่งไม่สำเร็จ ไฟล์ที่อัปโหลดแล้วไม่ต้องส่งซ้ำ' : 'ส่งไม่สำเร็จ');
+            $('alert').scrollIntoView({ block: 'start' });
+          });
+      }
+
+      function renderSuccess(result) {
+        root.innerHTML =
+          '<div class="card flex flex-col items-center gap-3 px-6 py-12 text-center" role="status">' +
+            '<span class="flex h-16 w-16 items-center justify-center rounded-full bg-success-bg text-success-fg">' + icon('circle-check', 'h-8 w-8') + '</span>' +
+            '<h2 class="heading-2 mt-2">ส่งผลงานเรียบร้อยแล้ว</h2>' +
+            '<p class="text-meta">รหัสงานของคุณ</p>' +
+            '<p class="font-heading text-3xl font-bold tracking-wide text-navy-700 md:text-5xl" data-reg="code">' + escapeHtml(result.submissionId) + '</p>' +
+            '<button type="button" class="btn-secondary" data-reg="copy">' + icon('copy', 'h-4 w-4') + 'คัดลอกรหัสงาน</button>' +
+            '<p class="mt-4 max-w-md">เราส่งลิงก์ติดตามสถานะไปที่อีเมล <span class="font-semibold break-all">' + escapeHtml(result.email) + '</span> แล้ว ' +
+              'หากไม่พบ กรุณาตรวจในโฟลเดอร์จดหมายขยะ</p>' +
+            '<p class="text-meta max-w-md">เก็บรหัสงานนี้ไว้ใช้อ้างอิงเมื่อติดต่อหน่วยส่งเสริมงานวิจัย</p>' +
+            '<a href="#" data-route="home" class="btn-ghost mt-4">กลับหน้าหลัก</a>' +
+          '</div>';
+        $('copy').addEventListener('click', () => {
+          const done = () => toast('คัดลอกรหัสงานแล้ว', 'success');
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(result.submissionId).then(done, () => toast('คัดลอกไม่สำเร็จ กรุณาจดรหัสงานไว้', 'warning'));
+          } else {
+            const range = document.createRange();
+            range.selectNodeContents($('code'));
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+            toast('เลือกรหัสงานแล้ว กด Ctrl+C เพื่อคัดลอก', 'info');
+          }
+        });
+        refreshIcons();
+        root.scrollIntoView({ block: 'start' });
+      }
+
+      function renderClosed(info) {
+        const event = info.event;
+        let message = 'ยังไม่มีรอบกิจกรรมที่เปิดรับลงทะเบียน ติดตามข่าวประชาสัมพันธ์';
+        if (event && daysUntil(event.open_date) > 0) message = 'เปิดรับลงทะเบียน ' + formatThaiDate(event.open_date) + ' ถึง ' + formatThaiDate(event.close_date);
+        else if (event) message = 'ปิดรับลงทะเบียนแล้วเมื่อ ' + formatThaiDate(event.close_date) + ' ติดตามรอบถัดไปได้ที่ข่าวประชาสัมพันธ์';
+        root.innerHTML = renderEmptyState({ icon: 'calendar-x', title: 'ขณะนี้ไม่อยู่ในช่วงเปิดรับลงทะเบียน', message: message, actionLabel: 'ดูกำหนดการ', actionRoute: 'timeline' });
+        refreshIcons();
+      }
+
+      // ---------- เริ่ม ----------
+
+      const load = () => {
+        root.innerHTML = renderSkeleton('text', 6);
+        return callServer('getRegistrationInfo').then(info => {
+          if (!isCurrent()) return;
+          reg.info = info;
+          if (info.event) heroText.textContent = info.event.name;
+          if (!info.open) return renderClosed(info);
+          renderShell();
+          showStep(1);
+        }).catch(err => {
+          if (!isCurrent()) return;
+          root.innerHTML = '';
+          root.appendChild(createErrorState(err.message, load));
+          refreshIcons();
+        });
+      };
+      return load();
+    }
+  });
+</script>

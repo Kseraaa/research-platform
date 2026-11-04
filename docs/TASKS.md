@@ -45,11 +45,11 @@
 
 ## เฟส 2: ลงทะเบียนบุคคลภายนอก (หัวใจของระบบ)
 
-- [ ] `files.gs`: `saveUploadedFile_()` ตรวจนามสกุล MIME ขนาด magic bytes แล้วบันทึก Drive + FILES
-- [ ] `submissions.gs`: `createSubmission`, `uploadFile`, `finalizeSubmission` ตาม `docs/ARCHITECTURE.md` ข้อ 6
-- [ ] `js_upload.html`: อ่านไฟล์เป็น base64, progress bar ทีละไฟล์, retry 2 ครั้ง
-- [ ] `page_register.html`: stepper 4 ขั้นตาม DESIGN.md ข้อ 6, เลือก Oral/Poster ด้วย radio card → แสดง dropzone ตามประเภท, ลิงก์แบบฟอร์ม Word (จาก `DOCUMENTS.template_for`), PDPA checkbox, allow_publish (ใช่/ไม่ใช่ ต้องเลือก), validate ครบก่อนกดส่ง, ย้อนกลับได้ไม่เสียข้อมูล, ปิดฟอร์มนอกช่วงเปิดรับ
-- [ ] หน้าส่งสำเร็จ: แสดงรหัสงานตัวใหญ่ + ปุ่มคัดลอก + บอกให้ตรวจอีเมล
+- [x] `files.gs`: `saveUploadedFile_()` ตรวจนามสกุล MIME ขนาด magic bytes แล้วบันทึก Drive + FILES
+- [x] `submissions.gs`: `createSubmission`, `uploadFile`, `finalizeSubmission` ตาม `docs/ARCHITECTURE.md` ข้อ 6
+- [x] `js_upload.html`: อ่านไฟล์เป็น base64, progress bar ทีละไฟล์, retry 2 ครั้ง
+- [x] `page_register.html`: stepper 4 ขั้นตาม DESIGN.md ข้อ 6, เลือก Oral/Poster ด้วย radio card → แสดง dropzone ตามประเภท, ลิงก์แบบฟอร์ม Word (จาก `DOCUMENTS.template_for`), PDPA checkbox, allow_publish (ใช่/ไม่ใช่ ต้องเลือก), validate ครบก่อนกดส่ง, ย้อนกลับได้ไม่เสียข้อมูล, ปิดฟอร์มนอกช่วงเปิดรับ
+- [x] หน้าส่งสำเร็จ: แสดงรหัสงานตัวใหญ่ + ปุ่มคัดลอก + บอกให้ตรวจอีเมล
 
 > **Prompt:** ทำเฟส 2 ใน docs/TASKS.md ตาม flow การอัปโหลดใน ARCHITECTURE.md ข้อ 6 อย่างเคร่งครัด ใส่ LockService ตอนสร้าง submission_id และเขียน test ใน tests.gs สำหรับ validate ไฟล์ไม่ครบ ชนิดผิด และขนาดเกิน
 

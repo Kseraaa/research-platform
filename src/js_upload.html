@@ -1,1 +1,63 @@
-<!-- js_upload.html: อ่านไฟล์เป็น base64 + progress + retry (เฟส 2) -->
+<!-- js_upload.html: อ่านไฟล์เป็น base64, อัปโหลดทีละไฟล์พร้อม progress และลองใหม่อัตโนมัติ 2 ครั้ง
+     ใช้ร่วมกันระหว่างหน้าลงทะเบียน (เฟส 2), ส่งงานครู (เฟส 4) และส่งฉบับแก้ไข (เฟส 3) -->
+<script>
+  const UPLOAD_RETRIES = 2;
+  const UPLOAD_RETRY_DELAY_MS = 1500;
+
+  /** File → base64 (ไม่มี prefix data:...;base64,) รายงานความคืบหน้าการอ่าน 0–1 */
+  function readFileAsBase64(file, onProgress) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onprogress = e => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
+      reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+      reader.onerror = () => reject(new Error('อ่านไฟล์ไม่สำเร็จ กรุณาเลือกไฟล์ใหม่'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /** เรียก fn() ซ้ำเมื่อเชื่อมต่อล้มเหลว (ไม่ลองซ้ำเมื่อ server ปฏิเสธด้วยเหตุผลที่ชัดเจน เช่น ชนิดไฟล์ผิด) */
+  function withRetry(fn, retries) {
+    return fn().catch(err => {
+      const isNetwork = err && err.message === 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่';
+      if (!isNetwork || retries <= 0) throw err;
+      return new Promise(resolve => setTimeout(resolve, UPLOAD_RETRY_DELAY_MS)).then(() => withRetry(fn, retries - 1));
+    });
+  }
+
+  /**
+   * อัปโหลด 1 ไฟล์ แสดงความคืบหน้าบน dropzone
+   * google.script.run ไม่มี progress event จริง: 0–30% = อ่านไฟล์, 30–90% = ค่อยๆ เพิ่มระหว่างรอ server, 100% = สำเร็จ
+   */
+  function uploadOneFile(o) {
+    const dz = o.dropzone;
+    const file = dz.getFile();
+    let percent = 0;
+    const show = p => { percent = p; dz.setUploading(p); };
+    show(0);
+
+    return readFileAsBase64(file, ratio => show(ratio * 30)).then(base64 => {
+      show(30);
+      const timer = setInterval(() => show(Math.min(90, percent + (90 - percent) * 0.08)), 400);
+      return withRetry(() => callServer('uploadFile', o.submissionId, o.uploadKey, o.fileKind, file.name, file.type, base64), UPLOAD_RETRIES)
+        .finally(() => clearInterval(timer));
+    }).then(result => {
+      dz.setSuccess();
+      return result;
+    }, err => {
+      dz.setError(err.message);
+      throw err;
+    });
+  }
+
+  /**
+   * อัปโหลดหลายไฟล์ตามลำดับ ข้ามไฟล์ที่สำเร็จแล้ว (ใน done) เพื่อให้กดลองใหม่ได้โดยไม่ส่งซ้ำ
+   * @param {{ submissionId, uploadKey, items: { fileKind, dropzone }[], done: Object }} o
+   */
+  function uploadFilesInOrder(o) {
+    return o.items.reduce((chain, item) => chain.then(() => {
+      if (o.done[item.fileKind]) return null;
+      return uploadOneFile({ submissionId: o.submissionId, uploadKey: o.uploadKey, fileKind: item.fileKind, dropzone: item.dropzone })
+        .then(result => { o.done[item.fileKind] = result; });
+    }), Promise.resolve());
+  }
+</script>

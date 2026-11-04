@@ -134,6 +134,13 @@ function getMySubmissions(sessionToken) {
 4. `finalizeSubmission(submissionId, uploadKey)` → ตรวจว่ามีไฟล์ครบตาม `REQUIRED_FILES[type]` → สถานะ `submitted` → STATUS_LOG → ส่งอีเมล → คืนรหัสงาน
 5. draft ที่ไม่ finalize ภายใน 24 ชม. ถูกลบโดย trigger รายวัน
 
+รายละเอียดที่ทำไว้ (เฟส 2):
+- `createSubmission` ตรวจช่วงเปิดรับซ้ำฝั่ง server และจำกัด 5 ครั้ง / ชม. / อีเมล (กันการสร้าง draft และโฟลเดอร์รัวๆ)
+- ตรวจไฟล์ด้วย `validateUploadedFile_()` (files.gs) ซึ่งไม่แตะ Drive/Sheets จึงทดสอบได้ด้วย `runSubmissionTests()` ใน tests.gs
+- งาน draft ส่งไฟล์ชนิดเดิมซ้ำ (เปลี่ยนไฟล์ / ลองใหม่): ไฟล์เดิมถูกย้ายไปถังขยะ Drive และยังเป็น version 1 / ฉบับแก้ไขหลังส่งแล้ว (เฟส 3) จึงเป็น version + 1
+- `finalizeSubmission` อ่านสถานะซ้ำภายใต้ lock กันกดส่งซ้อน แล้วลบ `uploadKey` ทิ้ง
+- ฝั่ง client (`js_upload.html`): `google.script.run` ไม่มี progress event จริง progress bar จึงเป็น 0–30% อ่านไฟล์ → 30–90% ค่อยๆ เพิ่มระหว่างรอ → 100% สำเร็จ / ลองใหม่อัตโนมัติ 2 ครั้งเฉพาะกรณีเชื่อมต่อไม่ได้ / กดลองใหม่จะส่งเฉพาะไฟล์ที่ยังไม่สำเร็จ ไม่สร้างงานซ้ำ
+
 ขนาดไฟล์สูงสุดเริ่มต้น 20 MB ต่อไฟล์ (base64 ทำให้ payload ใหญ่ขึ้นราว 33%)
 
 **การเปิดไฟล์:**

@@ -173,7 +173,8 @@ function getDocumentsData_() {
         academic_year: Number(d.academic_year) || '',
         file_type: d.file_type,
         size_kb: d.size_kb,
-        drive_file_id: d.drive_file_id
+        drive_file_id: d.drive_file_id,
+        template_for: d.template_for
       }));
     const categories = readAll_('DOC_CATEGORIES').sort(bySortOrder_).map(c => ({
       category_id: c.category_id,
