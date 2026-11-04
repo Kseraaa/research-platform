@@ -58,7 +58,8 @@ research-platform/
     ├── page_library.html  ← คลังงานวิจัย
     ├── page_videos.html   ← คลังวิดีโอ
     ├── page_login.html    ← ขอ OTP / ใส่ OTP
-    └── page_admin.html    ← หน้าแอดมิน
+    ├── page_admin.html    ← หน้าแอดมิน
+    └── page_privacy.html  ← ประกาศความเป็นส่วนตัว (PDPA) ใช้ทั้งหน้า privacy และ modal ในฟอร์มลงทะเบียน
 ```
 
 แต่ละ `page_*.html` เป็น `<template id="tpl-xxx">` + `<script>` ที่ลงทะเบียนฟังก์ชัน `render(params)` กับ router ใน `js_app.html`
@@ -210,11 +211,21 @@ function getMySubmissions(sessionToken) {
 
 ## 9. Checklist ความปลอดภัย
 
-- [ ] public function ทุกตัวตรวจสิทธิ์และ validate input (ความยาว, enum, รูปแบบอีเมล)
-- [ ] helper ทุกตัวลงท้ายด้วย `_`
-- [ ] ไม่ส่ง `track_token`, อีเมล, เบอร์โทรของผู้อื่นให้ client
-- [ ] แสดงข้อมูลผู้ใช้ด้วย `textContent` / escape
-- [ ] ไม่มี API key ในโค้ด
-- [ ] ไฟล์ใน Drive ไม่แชร์สาธารณะ
-- [ ] จำกัดอัตราการขอ OTP และการลองรหัส
-- [ ] ค่า `track_token` และ session เป็น UUID สุ่ม ไม่เดาได้
+- [x] public function ทุกตัวตรวจสิทธิ์และ validate input (ความยาว, enum, รูปแบบอีเมล)
+- [x] helper ทุกตัวลงท้ายด้วย `_`
+- [x] ไม่ส่ง `track_token`, อีเมล, เบอร์โทรของผู้อื่นให้ client
+- [x] แสดงข้อมูลผู้ใช้ด้วย `textContent` / escape
+- [x] ไม่มี API key ในโค้ด
+- [x] ไฟล์ใน Drive ไม่แชร์สาธารณะ
+- [x] จำกัดอัตราการขอ OTP และการลองรหัส
+- [x] ค่า `track_token` และ session เป็น UUID สุ่ม ไม่เดาได้
+
+ผลตรวจ (เฟส 7, 2026-11-04):
+- ฟังก์ชันที่หน้าเว็บเรียกได้ (ชื่อไม่ลงท้าย `_`) มี 3 กลุ่ม:
+  1. **สาธารณะโดยตั้งใจ:** `doGet`, `include` (เฉพาะไฟล์ `css_`/`js_`/`page_`), `getHomeData`, `getTimeline`, `getNews`, `getNewsDetail`, `getDocuments`, `getVideos`, `getRegistrationInfo`, `requestOtp`, `verifyOtp`, `logout`, `cleanupDrafts` (ลบได้แค่ draft ที่หมดอายุ)
+  2. **ใช้ token:** `createSubmission`/`uploadFile`/`finalizeSubmission` (uploadKey), `getTrackingInfo`/`startRevision`/`uploadRevisionFile`/`submitRevision` (track_token), ฟังก์ชันอื่นใช้ session + `requireRole_()`
+  3. **รันได้เฉพาะเจ้าของสคริปต์ใน editor (`assertEditorRun_`):** `setup`, `seedSampleData`, `clearSampleData`, `run*Tests`, `sendTestEmail`, `installTriggers`
+- จำกัดการสร้างงาน: 5 ครั้ง/ชม./อีเมล และ 200 ครั้ง/10 นาที ทั้งระบบ (กันการเปลี่ยนอีเมลเพื่อสร้างโฟลเดอร์ Drive รัวๆ) draft ค้างถูกลบโดย trigger รายวัน
+- ไฟล์ที่แชร์: เอกสารดาวน์โหลดและรูปปกข่าว = ทุกคนที่มีลิงก์ (ข้อมูลสาธารณะ) / ไฟล์งานในคลัง = เฉพาะคนในโดเมน / ไฟล์งานอื่นๆ ไม่แชร์ เปิดผ่าน `getFileForViewer` เท่านั้น
+- กันสูตรใน Sheets (formula injection) ด้วย `escapeFormula_()` ใน db.gs
+- ยังไม่ได้ทำ: `XFrameOptionsMode` ยังเป็นค่าเริ่มต้น (ป้องกันการฝังในเว็บอื่น) ถ้าจะฝังในเว็บโรงเรียนที่ไม่ใช่ Google Sites ต้องตั้ง `.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)` ใน `doGet` ซึ่งทำให้เว็บอื่นฝังหน้านี้ได้ (เสี่ยง clickjacking) ให้ตัดสินใจตอน deploy

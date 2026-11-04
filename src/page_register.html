@@ -190,11 +190,10 @@
           if (radio) radio.checked = true;
         }
         body.querySelectorAll('[data-goto]').forEach(btn => btn.addEventListener('click', () => { collect(); showStep(Number(btn.dataset.goto)); }));
+        // เปิดใน modal (ไม่ออกจากหน้า ข้อมูลที่กรอกไม่หาย) เนื้อหาชุดเดียวกับหน้า privacy
         $('privacy').addEventListener('click', () => modal({
-          title: 'ประกาศความเป็นส่วนตัว (ฉบับย่อ)',
-          content: 'หน่วยส่งเสริมงานวิจัย โรงเรียน มอ.วิทยานุสรณ์ เก็บชื่อ อีเมล เบอร์โทร หน่วยงาน และไฟล์ผลงานของคุณ ' +
-            'เพื่อใช้พิจารณาและจัดกิจกรรมนำเสนอผลงาน ติดต่อกลับ และแจ้งสถานะทางอีเมลเท่านั้น ข้อมูลติดต่อเห็นได้เฉพาะผู้ดูแลระบบ ' +
-            'คุณขอดู แก้ไข หรือลบข้อมูลได้โดยติดต่อ ' + ((appConfig.contact || {}).email || 'หน่วยส่งเสริมงานวิจัย'),
+          title: 'ประกาศความเป็นส่วนตัว',
+          content: htmlToElement('<div class="text-ink">' + renderPrivacyNoticeHtml() + '</div>'),
           actions: [{ label: 'ปิด', variant: 'secondary' }]
         }));
       }

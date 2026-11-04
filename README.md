@@ -43,6 +43,18 @@ claude
 5. Deploy → Test deployments → คัดลอก URL `/dev` ไปทดสอบ
 6. ตอน deploy จริง: Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone) แล้วนำ URL `/exec` ไปใส่ใน Script Property `WEBAPP_URL`
 
+## ขึ้นใช้งานจริง (checklist)
+
+1. ใช้บัญชี Google Workspace ของโรงเรียนเป็นเจ้าของสคริปต์ (คลังงานวิจัยแชร์ไฟล์แบบ "ทุกคนในโดเมน")
+2. ขอให้ผู้ดูแล Workspace อนุญาตการแชร์แบบ "ทุกคนที่มีลิงก์" (ใช้กับเอกสารดาวน์โหลดและรูปปกข่าว ถ้าปิดไว้ระบบจะแจ้ง error ตอนอัปโหลด)
+3. Script Properties ครบ: `RESEND_API_KEY`, `EMAIL_FROM` (โดเมน verify ใน Resend แล้ว), `ADMIN_NOTIFY_EMAIL`, `SCHOOL_EMAIL_DOMAIN`, `MAX_FILE_MB`, `WEBAPP_URL` (URL `/exec`)
+4. รัน `installTriggers` ใน editor ครั้งเดียว (ลบงาน draft ค้างทุกวัน 02:00 น.)
+5. รัน `clearSampleData` ถ้าเคยใส่ข้อมูลตัวอย่าง แล้วเพิ่มรอบกิจกรรม กำหนดการ เอกสาร (รวมแบบฟอร์ม Word ของ Oral/Poster ตั้ง "เป็นแบบฟอร์มของ") ผ่านหน้า "จัดการระบบ"
+6. แก้ข้อมูลจริงใน `config.gs`: `ORG_CONTACT` (ที่อยู่ เบอร์ อีเมล) และ `PRIVACY_NOTICE` + ให้ผู้รับผิดชอบด้านข้อมูลส่วนบุคคลตรวจเนื้อหาใน `page_privacy.html` / เปลี่ยนโลโก้ placeholder ใน `index.html`
+7. ทดสอบบน `/dev`: ส่งงานพร้อมกันหลายแท็บ (รหัสงานต้องไม่ซ้ำ), ไฟล์ใหญ่บนมือถือ, รับอีเมลทุกแบบ (`sendTestEmail`)
+8. Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone) → ตั้ง `WEBAPP_URL` → ครั้งต่อไปอัปเดตด้วย `clasp deploy -i <DEPLOYMENT_ID>` (URL ไม่เปลี่ยน)
+9. ฝังในเว็บ: Google Sites ใช้ "ฝัง → URL" วาง URL `/exec` / เว็บโรงเรียนอื่น ต้องเพิ่ม `.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)` ใน `doGet` ก่อน (ดูความเสี่ยงใน ARCHITECTURE ข้อ 9) หรือใช้ปุ่มลิงก์ไปที่ URL `/exec` แทนการฝัง
+
 ## การพัฒนาประจำวัน
 
 ```bash

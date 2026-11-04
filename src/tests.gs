@@ -1,6 +1,6 @@
 /**
  * tests.gs
- * ฟังก์ชันสำหรับรันใน Apps Script editor โดยเจ้าของสคริปต์เท่านั้น
+ * ฟังก์ชันสำหรับรันใน Apps Script editor โดยเจ้าของสคริปต์เท่านั้น (ทุกตัวเรียก assertEditorRun_() กันการเรียกผ่านหน้าเว็บ)
  * - seedSampleData(): ใส่ข้อมูลตัวอย่างสำหรับทดสอบหน้าสาธารณะ (ID ทุกตัวมีคำว่า SAMPLE)
  * - clearSampleData(): ลบข้อมูลตัวอย่างทั้งหมด ไม่แตะข้อมูลจริง
  */
@@ -210,6 +210,7 @@ function createTestRunner_() {
  * ผลลัพธ์ดูใน Execution log ถ้ามีข้อใดไม่ผ่านจะ throw ตอนท้าย
  */
 function runSubmissionTests() {
+  assertEditorRun_();
   const runner = createTestRunner_();
   const test = runner.test;
   const expectError = runner.expectError;
@@ -280,6 +281,7 @@ function runSubmissionTests() {
  * ใช้ CacheService ชั่วคราว (ลบทิ้งหลังทดสอบ) ไม่แตะ Sheets
  */
 function runAuthTests() {
+  assertEditorRun_();
   const t = createTestRunner_();
 
   t.test('รหัส OTP เป็นตัวเลข 6 หลักและสุ่มไม่ซ้ำ', () => {
@@ -340,6 +342,7 @@ function runAuthTests() {
  * รันใน editor: transition ที่ผู้ตรวจเลือกได้, การตรวจฟิลด์ของ CRUD, วันที่, ลิงก์ YouTube, ไฟล์สาธารณะ (ไม่แตะ Drive/Sheets)
  */
 function runAdminTests() {
+  assertEditorRun_();
   const t = createTestRunner_();
   const transitions = (type, status) => allowedAdminTransitions_({ type: type, status: status }).join(',');
 
@@ -427,6 +430,7 @@ function runAdminTests() {
  * รันใน editor: สร้างอีเมลทุก template (ไม่ส่งจริง) ตรวจ subject, escape HTML และลิงก์
  */
 function runEmailTests() {
+  assertEditorRun_();
   const t = createTestRunner_();
   const evil = '<script>alert(1)</script> & "x"';
   const base = { name: evil, submission_id: 'SUB-2026-0001', title: evil, type: 'oral', link_url: 'https://script.google.com/macros/s/X/exec?page=track&t=abc', link_label: 'ติดตามสถานะผลงาน' };

@@ -10,6 +10,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_CO_AUTHORS = 10;
 const CREATE_LIMIT_PER_EMAIL = 5; // ต่อชั่วโมง กันการสร้าง draft รัวๆ
 const CREATE_LIMIT_WINDOW_SEC = 60 * 60;
+const CREATE_LIMIT_GLOBAL = 200; // ทั้งระบบต่อ 10 นาที กันการเปลี่ยนอีเมลไปเรื่อยๆ เพื่อสร้างโฟลเดอร์ Drive รัวๆ
+const CREATE_LIMIT_GLOBAL_WINDOW_SEC = 10 * 60;
 
 // ---------- public API ----------
 
@@ -411,7 +413,10 @@ function checkCreateRateLimit_(email) {
   const key = 'create-limit:' + email;
   const count = Number(cache.get(key) || 0);
   if (count >= CREATE_LIMIT_PER_EMAIL) throw userError_('ส่งคำขอบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่');
+  const globalCount = Number(cache.get('create-limit:all') || 0);
+  if (globalCount >= CREATE_LIMIT_GLOBAL) throw userError_('ขณะนี้มีผู้ส่งงานจำนวนมาก กรุณาลองใหม่ในอีก 10 นาที');
   cache.put(key, String(count + 1), CREATE_LIMIT_WINDOW_SEC);
+  cache.put('create-limit:all', String(globalCount + 1), CREATE_LIMIT_GLOBAL_WINDOW_SEC);
 }
 
 // ---------- ผู้ส่งงาน + รหัสงาน ----------

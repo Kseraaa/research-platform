@@ -9,6 +9,14 @@ const SCHOOL_NAME = 'โรงเรียน มอ.วิทยานุสร
 const ORG_FULL_NAME = ORG_NAME + ' ' + SCHOOL_NAME;
 const TIMEZONE = 'Asia/Bangkok';
 
+/**
+ * ค่าที่ใช้ในประกาศความเป็นส่วนตัว (page_privacy.html) ให้ผู้รับผิดชอบด้านข้อมูลส่วนบุคคลของโรงเรียนตรวจก่อนใช้งานจริง
+ */
+const PRIVACY_NOTICE = Object.freeze({
+  retentionYears: 5,
+  updatedAt: '2026-11-04'
+});
+
 /** ข้อมูลติดต่อใน footer (placeholder ระหว่างพัฒนา เปลี่ยนเป็นของจริงก่อน deploy) */
 const ORG_CONTACT = Object.freeze({
   address: 'ที่อยู่โรงเรียน (รอข้อมูลจริง)',
@@ -210,6 +218,7 @@ function getClientConfig_() {
     orgName: ORG_NAME,
     schoolName: SCHOOL_NAME,
     contact: ORG_CONTACT,
+    privacy: PRIVACY_NOTICE,
     statusLabels: STATUS_LABELS_TH,
     typeLabels: TYPE_LABELS_TH,
     fileKinds: FILE_KIND_SPECS,
