@@ -228,4 +228,10 @@ function getMySubmissions(sessionToken) {
 - จำกัดการสร้างงาน: 5 ครั้ง/ชม./อีเมล และ 200 ครั้ง/10 นาที ทั้งระบบ (กันการเปลี่ยนอีเมลเพื่อสร้างโฟลเดอร์ Drive รัวๆ) draft ค้างถูกลบโดย trigger รายวัน
 - ไฟล์ที่แชร์: เอกสารดาวน์โหลดและรูปปกข่าว = ทุกคนที่มีลิงก์ (ข้อมูลสาธารณะ) / ไฟล์งานในคลัง = เฉพาะคนในโดเมน / ไฟล์งานอื่นๆ ไม่แชร์ เปิดผ่าน `getFileForViewer` เท่านั้น
 - กันสูตรใน Sheets (formula injection) ด้วย `escapeFormula_()` ใน db.gs
-- ยังไม่ได้ทำ: `XFrameOptionsMode` ยังเป็นค่าเริ่มต้น (ป้องกันการฝังในเว็บอื่น) ถ้าจะฝังในเว็บโรงเรียนที่ไม่ใช่ Google Sites ต้องตั้ง `.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)` ใน `doGet` ซึ่งทำให้เว็บอื่นฝังหน้านี้ได้ (เสี่ยง clickjacking) ให้ตัดสินใจตอน deploy
+- การฝัง: `doGet` ตั้ง `XFrameOptionsMode.ALLOWALL` เพื่อให้หน้าห่อบน Netlify (`netlify/`) ฝัง `/exec` เป็น iframe เต็มจอบนโดเมนของโรงเรียน ผลคือเว็บอื่นก็ฝังได้ (เสี่ยง clickjacking) ยอมรับได้เพราะการกระทำสำคัญต้องมี session หรือ track token ส่วนหน้าห่อเองตั้ง `X-Frame-Options: DENY` และ `Referrer-Policy: no-referrer` ใน `netlify.toml`
+
+### หน้าห่อบน Netlify
+
+- `netlify/index.html` สร้าง iframe ไปที่ `APP_URL` (URL `/exec`) และส่งต่อเฉพาะพารามิเตอร์ `page`, `t`, `id` (ตรงกับ `INITIAL_PARAM_KEYS`) ลิงก์จากอีเมลจึงชี้ไปที่ Netlify ได้ โดยตั้ง Script Property `WEBAPP_URL` เป็น URL ของ Netlify
+- URL บนแถบที่อยู่ไม่เปลี่ยนตามหน้าที่เปิดข้างใน ลิงก์ออกนอกแอปทุกอันต้องใช้ `target="_blank"` (เพราะ `<base target="_top">` จะเปิดทับหน้าห่อ)
+- ถ้า iframe ไม่ขึ้นใน 20 วินาที แสดงลิงก์เปิด `/exec` โดยตรง

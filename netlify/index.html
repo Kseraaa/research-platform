@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<!-- netlify/index.html: หน้าห่อบน Netlify ฝังเว็บแอป Apps Script (/exec) เป็น iframe เต็มจอ
+     แก้ APP_URL ด้านล่างเป็น URL /exec หลัง deploy แล้วตั้ง Script Property WEBAPP_URL เป็น URL ของ Netlify
+     สีตรงกับ navy-800 / navy-100 ใน css_main.html (หน้านี้ไม่ได้โหลด Tailwind) -->
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>หน่วยส่งเสริมงานวิจัย โรงเรียน มอ.วิทยานุสรณ์</title>
+  <meta name="description" content="ส่งงานวิจัย ลงทะเบียนนำเสนอผลงาน ข่าว เอกสาร และคลังงานวิจัย ของหน่วยส่งเสริมงานวิจัย โรงเรียน มอ.วิทยานุสรณ์">
+  <style>
+    html, body { margin: 0; height: 100%; background: #0D2F4B; }
+    #app-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #0D2F4B; }
+    #loading, #fallback {
+      position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+      padding: 16px; text-align: center; color: #D5E1EC; font: 16px/1.6 system-ui, "Noto Sans Thai", sans-serif;
+      z-index: 1; background: #0D2F4B;
+    }
+    #loading[hidden], #fallback[hidden] { display: none; }
+    #loading .spinner { width: 32px; height: 32px; border: 3px solid #123A5C; border-top-color: #D5E1EC; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { #loading .spinner { animation: none; } }
+    a { color: #fff; }
+  </style>
+</head>
+<body>
+  <div id="loading" role="status"><div class="spinner" aria-hidden="true"></div><span>กำลังโหลด...</span></div>
+  <div id="fallback" hidden></div>
+  <noscript><div id="noscript-msg" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#D5E1EC;padding:16px;text-align:center;background:#0D2F4B">กรุณาเปิดใช้ JavaScript เพื่อใช้งานเว็บไซต์นี้</div></noscript>
+
+  <script>
+    // URL /exec ของ deployment จริง (ไม่ใช่ /dev ซึ่งคนนอกเปิดไม่ได้)
+    var APP_URL = 'https://script.google.com/macros/s/DEPLOYMENT_ID/exec';
+    // พารามิเตอร์ที่ doGet รับ (ตรงกับ INITIAL_PARAM_KEYS ใน Code.gs) เช่น ลิงก์ติดตามจากอีเมล ?page=track&t=...
+    var FORWARD_KEYS = ['page', 't', 'id'];
+    // ถ้า iframe ไม่ขึ้นภายในเวลานี้ แสดงลิงก์เปิดตรง
+    var LOAD_TIMEOUT_MS = 20000;
+
+    (function () {
+      var loading = document.getElementById('loading');
+      var fallback = document.getElementById('fallback');
+
+      function showFallback(message, url) {
+        loading.hidden = true;
+        fallback.textContent = '';
+        var p = document.createElement('p');
+        p.textContent = message;
+        fallback.appendChild(p);
+        if (url) {
+          var a = document.createElement('a');
+          a.href = url;
+          a.textContent = 'เปิดเว็บไซต์โดยตรง';
+          fallback.appendChild(a);
+        }
+        fallback.hidden = false;
+      }
+
+      if (APP_URL.indexOf('DEPLOYMENT_ID') !== -1) {
+        showFallback('ยังไม่ได้ตั้งค่า APP_URL ใน netlify/index.html');
+        return;
+      }
+
+      var source = new URLSearchParams(window.location.search);
+      var forward = new URLSearchParams();
+      FORWARD_KEYS.forEach(function (key) {
+        var value = source.get(key);
+        if (value) forward.set(key, value);
+      });
+      var query = forward.toString();
+      var target = APP_URL + (query ? '?' + query : '');
+
+      var frame = document.createElement('iframe');
+      frame.id = 'app-frame';
+      frame.title = document.title;
+      frame.src = target;
+      // ไม่ใส่ sandbox: Apps Script ครอบ sandbox ของตัวเองอยู่แล้ว และต้องใช้ดาวน์โหลด/อัปโหลด/เปิดแท็บใหม่
+      frame.setAttribute('allow', 'clipboard-write');
+      frame.setAttribute('referrerpolicy', 'no-referrer');
+
+      var timer = setTimeout(function () {
+        showFallback('โหลดเว็บไซต์นานผิดปกติ', target);
+      }, LOAD_TIMEOUT_MS);
+      frame.addEventListener('load', function () {
+        clearTimeout(timer);
+        loading.hidden = true;
+        fallback.hidden = true;
+      });
+
+      document.body.appendChild(frame);
+    })();
+  </script>
+</body>
+</html>

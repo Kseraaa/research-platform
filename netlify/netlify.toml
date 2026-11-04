@@ -1,0 +1,18 @@
+# ตั้ง Netlify: Base directory = netlify, Publish directory = netlify (ไม่มี build command)
+[build]
+  publish = "."
+
+# หน้าห่อนี้ไม่ให้เว็บอื่นฝังต่อ (กัน clickjacking ชั้นนอก) และไม่ส่ง URL ที่มี token ไปเป็น referrer
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    Content-Security-Policy = "frame-ancestors 'none'"
+    Referrer-Policy = "no-referrer"
+    X-Content-Type-Options = "nosniff"
+
+# path อื่น (เช่น /track) ให้ไปหน้าหลัก query string ติดไปด้วย
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

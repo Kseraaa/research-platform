@@ -41,19 +41,26 @@ claude
    - รัน `runAdminTests` เพื่อทดสอบการเปลี่ยนสถานะและการตรวจข้อมูลในหน้าแอดมิน
    - รัน `runEmailTests` เพื่อทดสอบ template อีเมล (ไม่ส่งจริง) และ `sendTestEmail` เพื่อส่งอีเมลจริงทุกแบบไปหาตัวเอง ใช้ตรวจว่าตั้ง `RESEND_API_KEY` / `EMAIL_FROM` ถูก
 5. Deploy → Test deployments → คัดลอก URL `/dev` ไปทดสอบ
-6. ตอน deploy จริง: Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone) แล้วนำ URL `/exec` ไปใส่ใน Script Property `WEBAPP_URL`
+6. ตอน deploy จริง: Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone) แล้วตั้งหน้าห่อ Netlify ตามข้อ 9 ของ checklist ด้านล่าง
 
 ## ขึ้นใช้งานจริง (checklist)
 
 1. ใช้บัญชี Google Workspace ของโรงเรียนเป็นเจ้าของสคริปต์ (คลังงานวิจัยแชร์ไฟล์แบบ "ทุกคนในโดเมน")
 2. ขอให้ผู้ดูแล Workspace อนุญาตการแชร์แบบ "ทุกคนที่มีลิงก์" (ใช้กับเอกสารดาวน์โหลดและรูปปกข่าว ถ้าปิดไว้ระบบจะแจ้ง error ตอนอัปโหลด)
-3. Script Properties ครบ: `RESEND_API_KEY`, `EMAIL_FROM` (โดเมน verify ใน Resend แล้ว), `ADMIN_NOTIFY_EMAIL`, `SCHOOL_EMAIL_DOMAIN`, `MAX_FILE_MB`, `WEBAPP_URL` (URL `/exec`)
+3. Script Properties ครบ: `RESEND_API_KEY`, `EMAIL_FROM` (โดเมน verify ใน Resend แล้ว), `ADMIN_NOTIFY_EMAIL`, `SCHOOL_EMAIL_DOMAIN`, `MAX_FILE_MB`, `WEBAPP_URL` (URL ของ Netlify หรือ `/exec` ดูข้อ 9)
 4. รัน `installTriggers` ใน editor ครั้งเดียว (ลบงาน draft ค้างทุกวัน 02:00 น.)
 5. รัน `clearSampleData` ถ้าเคยใส่ข้อมูลตัวอย่าง แล้วเพิ่มรอบกิจกรรม กำหนดการ เอกสาร (รวมแบบฟอร์ม Word ของ Oral/Poster ตั้ง "เป็นแบบฟอร์มของ") ผ่านหน้า "จัดการระบบ"
 6. แก้ข้อมูลจริงใน `config.gs`: `ORG_CONTACT` (ที่อยู่ เบอร์ อีเมล) และ `PRIVACY_NOTICE` + ให้ผู้รับผิดชอบด้านข้อมูลส่วนบุคคลตรวจเนื้อหาใน `page_privacy.html` / เปลี่ยนโลโก้ placeholder ใน `index.html`
 7. ทดสอบบน `/dev`: ส่งงานพร้อมกันหลายแท็บ (รหัสงานต้องไม่ซ้ำ), ไฟล์ใหญ่บนมือถือ, รับอีเมลทุกแบบ (`sendTestEmail`)
-8. Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone) → ตั้ง `WEBAPP_URL` → ครั้งต่อไปอัปเดตด้วย `clasp deploy -i <DEPLOYMENT_ID>` (URL ไม่เปลี่ยน)
-9. ฝังในเว็บ: Google Sites ใช้ "ฝัง → URL" วาง URL `/exec` / เว็บโรงเรียนอื่น ต้องเพิ่ม `.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)` ใน `doGet` ก่อน (ดูความเสี่ยงใน ARCHITECTURE ข้อ 9) หรือใช้ปุ่มลิงก์ไปที่ URL `/exec` แทนการฝัง
+8. Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone) → ครั้งต่อไปอัปเดตด้วย `clasp deploy -i <DEPLOYMENT_ID>` (URL ไม่เปลี่ยน)
+9. หน้าห่อบน Netlify (โดเมนของโรงเรียน):
+   1. แก้ `APP_URL` ใน `netlify/index.html` เป็น URL `/exec` แล้ว commit
+   2. Netlify → Add new site → Import from Git → เลือก repo นี้ → Base directory `netlify`, Publish directory `netlify`, Build command เว้นว่าง
+   3. Domain management → ผูกโดเมน (เช่น `research.xxx.ac.th`) ตาม DNS ที่ Netlify บอก
+   4. ตั้ง Script Property `WEBAPP_URL` เป็น URL ของ Netlify (ลิงก์ในอีเมลจะชี้มาที่นี่)
+   5. ทดสอบในหน้าต่าง incognito: หน้าแรก, ลิงก์ติดตามจากอีเมล, อัปโหลดไฟล์, ดาวน์โหลดไฟล์ บนมือถือด้วย
+
+   ถ้าไม่ใช้ Netlify: Google Sites ใช้ "ฝัง → URL" วาง URL `/exec` หรือทำปุ่มลิงก์ไปที่ URL `/exec` แล้วตั้ง `WEBAPP_URL` เป็น `/exec`
 
 ## การพัฒนาประจำวัน
 

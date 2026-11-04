@@ -29,9 +29,12 @@ function doGet(e) {
   template.schoolName = SCHOOL_NAME;
   template.contact = ORG_CONTACT;
 
+  // ALLOWALL: ให้หน้าห่อบน Netlify (โดเมนของโรงเรียน) ฝังเป็น iframe ได้ ดู netlify/ และ ARCHITECTURE ข้อ 9
+  // ผลข้างเคียง: เว็บอื่นก็ฝังได้ (clickjacking) แต่การกระทำสำคัญต้องมี session / track token อยู่แล้ว
   return template.evaluate()
     .setTitle(ORG_FULL_NAME)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 /**
