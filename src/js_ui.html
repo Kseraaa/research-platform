@@ -725,6 +725,52 @@
       .join('');
   }
 
+  // ---------- หน้าส่งสำเร็จ ----------
+
+  /**
+   * createSubmissionSuccess({ submissionId, message, hint, actions: [{ label, route, params?, variant? } | { label, onClick, variant? }] })
+   * รหัสงานตัวใหญ่ + ปุ่มคัดลอก + ข้อความ (ใช้ทั้งหน้าลงทะเบียนและหน้าส่งงานครู)
+   * message เป็น HTML (ผู้เรียกต้อง escape ค่าจากผู้ใช้เอง) / hint เป็นข้อความธรรมดา
+   */
+  function createSubmissionSuccess(o) {
+    const el = htmlToElement(
+      '<div class="card flex flex-col items-center gap-3 px-6 py-12 text-center" role="status">' +
+        '<span class="flex h-16 w-16 items-center justify-center rounded-full bg-success-bg text-success-fg">' + icon('circle-check', 'h-8 w-8') + '</span>' +
+        '<h2 class="heading-2 mt-2">ส่งผลงานเรียบร้อยแล้ว</h2>' +
+        '<p class="text-meta">รหัสงานของคุณ</p>' +
+        '<p class="font-heading text-3xl font-bold tracking-wide text-navy-700 md:text-5xl" data-success-code>' + escapeHtml(o.submissionId) + '</p>' +
+        '<button type="button" class="btn-secondary" data-success-copy>' + icon('copy', 'h-4 w-4') + 'คัดลอกรหัสงาน</button>' +
+        (o.message ? '<p class="mt-4 max-w-md [overflow-wrap:anywhere]">' + o.message + '</p>' : '') +
+        (o.hint ? '<p class="text-meta max-w-md">' + escapeHtml(o.hint) + '</p>' : '') +
+        '<div class="mt-4 flex flex-wrap justify-center gap-3" data-success-actions></div>' +
+      '</div>'
+    );
+    const actions = el.querySelector('[data-success-actions]');
+    (o.actions || []).forEach(a => {
+      const btn = a.onClick
+        ? htmlToElement('<button type="button" class="btn-' + (a.variant || 'ghost') + '"></button>')
+        : htmlToElement('<a href="#" data-route="' + escapeHtml(a.route) + '"' +
+            Object.keys(a.params || {}).map(k => ' data-param-' + escapeHtml(k) + '="' + escapeHtml(a.params[k]) + '"').join('') +
+            ' class="btn-' + (a.variant || 'ghost') + '"></a>');
+      btn.textContent = a.label;
+      if (a.onClick) btn.addEventListener('click', a.onClick);
+      actions.appendChild(btn);
+    });
+    el.querySelector('[data-success-copy]').addEventListener('click', () => {
+      const done = () => toast('คัดลอกรหัสงานแล้ว', 'success');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(o.submissionId).then(done, () => toast('คัดลอกไม่สำเร็จ กรุณาจดรหัสงานไว้', 'warning'));
+      } else {
+        const range = document.createRange();
+        range.selectNodeContents(el.querySelector('[data-success-code]'));
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        toast('เลือกรหัสงานแล้ว กด Ctrl+C เพื่อคัดลอก', 'info');
+      }
+    });
+    return el;
+  }
+
   const YOUTUBE_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 
   /** renderVideoCard({ youtube_id, title, description }) โหลด iframe เมื่อกดเล่นเท่านั้น */

@@ -1,1 +1,242 @@
-<!-- page_teacher.html: ส่งงานครู + งานของฉัน (เฟส 4) -->
+<!-- page_teacher.html: ครูส่งงานวิจัย (ฟอร์มหน้าเดียว) + งานของฉัน (?page=teacher&tab=mine)
+     อัปโหลดด้วย runSubmissionUpload / createDropzone ชุดเดียวกับหน้าลงทะเบียน -->
+<script>
+  /** ปีการศึกษาไทยปัจจุบัน (เริ่ม 16 พ.ค.): ก่อนเดือน พ.ค. ยังเป็นปีการศึกษาก่อนหน้า */
+  function currentThaiAcademicYear() {
+    const bkk = new Date(Date.now() + BANGKOK_OFFSET_MS);
+    return bkk.getUTCFullYear() + 543 - (bkk.getUTCMonth() < 4 ? 1 : 0);
+  }
+
+  registerPage('teacher', {
+    render(container, params, isCurrent) {
+      const session = appState.session;
+      container.innerHTML = renderPageHero({ title: 'ส่งงานวิจัย', description: 'สำหรับครูในโรงเรียน · ' + (session.name || session.email) }) +
+        '<section class="container-content section"><div class="mx-auto max-w-3xl">' +
+          '<div data-teacher="tabs"></div><div class="mt-6" data-teacher="panel" role="tabpanel"></div>' +
+        '</div></section>';
+      const panel = container.querySelector('[data-teacher="panel"]');
+      const KINDS = (appConfig.requiredFiles || {}).teacher || [];
+
+      // state ของฟอร์มอยู่ตลอดการเปิดหน้านี้ สลับแท็บไปมาแล้วข้อมูลไม่หาย
+      const form = {
+        data: { full_name: session.name || '', title: '', authors: session.name || '', subject_area: '', academic_year: String(currentThaiAcademicYear()), abstract_short: '', allow_publish: null },
+        dropzones: {},
+        submission: null,
+        done: {},
+        submitting: false,
+        result: null
+      };
+
+      const tabs = createTabs({
+        label: 'ส่งงานวิจัย',
+        items: [{ id: 'new', label: 'ส่งงานใหม่' }, { id: 'mine', label: 'งานของฉัน' }],
+        selected: params.tab === 'mine' ? 'mine' : 'new',
+        onChange: id => showTab(id)
+      });
+      container.querySelector('[data-teacher="tabs"]').appendChild(tabs);
+
+      function showTab(id) {
+        if (form.submitting) return;
+        if (id === 'mine') renderMine();
+        else renderForm();
+      }
+
+      // ---------- งานของฉัน ----------
+
+      function renderMine() {
+        panel.innerHTML = renderSkeleton('table', 3);
+        return callServer('getMySubmissions', sessionToken()).then(items => {
+          if (!isCurrent()) return;
+          if (!items.length) {
+            panel.innerHTML = renderEmptyState({ icon: 'inbox', title: 'ยังไม่มีงานที่ส่ง', message: 'งานวิจัยที่คุณส่งจะแสดงที่นี่พร้อมสถานะ', actionLabel: 'ส่งงานใหม่', actionName: 'teacher-new' });
+          } else {
+            panel.innerHTML = renderDataTable({
+              caption: 'งานของฉัน',
+              columns: [
+                { key: 'submission_id', label: 'รหัสงาน', html: r => '<span class="whitespace-nowrap font-medium">' + escapeHtml(r.submission_id) + '</span>' },
+                { key: 'title', label: 'ชื่อเรื่อง', html: r => '<span class="[overflow-wrap:anywhere]">' + escapeHtml(r.title) + '</span>' +
+                    (r.reviewer_note ? '<p class="text-meta mt-1">หมายเหตุ: ' + escapeHtml(r.reviewer_note) + '</p>' : '') },
+                { key: 'submitted_at', label: 'วันที่ส่ง', html: r => '<span class="whitespace-nowrap">' + escapeHtml(formatThaiDate(r.submitted_at)) + '</span>' },
+                { key: 'status', label: 'สถานะ', html: r => renderStatusBadge(r.status) }
+              ],
+              rows: items
+            });
+          }
+          refreshIcons();
+        }).catch(err => {
+          if (!isCurrent() || err.code === 'SESSION_EXPIRED') return;
+          panel.innerHTML = '';
+          panel.appendChild(createErrorState(err.message, renderMine));
+          refreshIcons();
+        });
+      }
+
+      panel.addEventListener('click', event => {
+        if (event.target.closest('[data-action="teacher-new"]')) selectTab('new');
+      });
+
+      function selectTab(id) {
+        const tab = tabs.querySelector('[data-tab="' + id + '"]');
+        if (tab) tab.click();
+      }
+
+      // ---------- ฟอร์มส่งงานใหม่ ----------
+
+      function getDropzone(kind) {
+        if (!form.dropzones[kind]) {
+          form.dropzones[kind] = createDropzone({ fileKind: kind, required: true, onChange: () => { delete form.done[kind]; }, onRetry: () => submit() });
+        }
+        return form.dropzones[kind];
+      }
+
+      function renderForm() {
+        if (form.result) return renderSuccess(form.result);
+        const d = form.data;
+        const locked = Boolean(form.submission);
+        panel.innerHTML =
+          '<div data-form="alert" class="mb-4"></div>' +
+          '<form class="card flex flex-col gap-6 p-5 md:p-8" novalidate data-form="form">' +
+            renderField({ id: 'tf-full_name', label: 'ชื่อ-นามสกุลของคุณ', required: true, value: d.full_name, maxlength: 200, disabled: locked,
+              help: 'อีเมล: ' + session.email }) +
+            renderField({ id: 'tf-title', label: 'ชื่อเรื่อง', required: true, value: d.title, maxlength: 300, disabled: locked }) +
+            renderField({ id: 'tf-authors', label: 'ผู้วิจัย', required: true, multiline: true, value: d.authors, disabled: locked,
+              help: 'หนึ่งชื่อต่อบรรทัด รวมชื่อของคุณ (ไม่เกิน 11 คน)' }) +
+            '<div class="grid gap-6 sm:grid-cols-2">' +
+              renderField({ id: 'tf-subject_area', label: 'กลุ่มสาระ / สาขา', required: true, value: d.subject_area, maxlength: 100, disabled: locked,
+                placeholder: 'เช่น คณิตศาสตร์' }) +
+              renderField({ id: 'tf-academic_year', label: 'ปีการศึกษา (พ.ศ.)', required: true, value: d.academic_year, inputmode: 'numeric', maxlength: 4, disabled: locked }) +
+            '</div>' +
+            renderField({ id: 'tf-abstract_short', label: 'บทคัดย่อสั้น', required: true, multiline: true, value: d.abstract_short, maxlength: 1500, disabled: locked,
+              help: 'ไม่เกิน 1,500 ตัวอักษร' }) +
+            '<p class="text-meta -mt-4 text-right" data-form="counter" aria-live="polite"></p>' +
+            '<fieldset class="field"><legend class="field-label mb-1">ไฟล์งานวิจัย <span class="field-required" aria-hidden="true">*</span></legend>' +
+              '<p class="field-help mb-2">ต้องส่งทั้งฉบับ PDF และฉบับ Word</p>' +
+              '<div class="flex flex-col gap-4" data-form="files"></div></fieldset>' +
+            renderYesNo({
+              name: 'tf-allow_publish', legend: 'อนุญาตให้เผยแพร่ในคลังงานวิจัยของโรงเรียน', required: true,
+              help: 'คลังงานวิจัยเปิดให้ครูในโรงเรียนอ่านได้', yesLabel: 'อนุญาต', noLabel: 'ไม่อนุญาต'
+            }) +
+            '<div class="border-t border-line pt-6"><button type="submit" class="btn-primary btn-lg w-full sm:w-auto" data-form="submit">ส่งงานวิจัย</button></div>' +
+          '</form>';
+
+        const filesBox = panel.querySelector('[data-form="files"]');
+        KINDS.forEach(kind => filesBox.appendChild(getDropzone(kind).element));
+        if (d.allow_publish !== null) panel.querySelector('input[name="tf-allow_publish"][value="' + (d.allow_publish ? 'yes' : 'no') + '"]').checked = true;
+        if (locked) panel.querySelectorAll('input[name="tf-allow_publish"]').forEach(r => { r.disabled = true; });
+
+        const abstract = panel.querySelector('#tf-abstract_short');
+        const counter = panel.querySelector('[data-form="counter"]');
+        const updateCounter = () => { counter.textContent = abstract.value.length.toLocaleString('th-TH') + ' / 1,500'; };
+        abstract.addEventListener('input', updateCounter);
+        updateCounter();
+
+        panel.querySelector('[data-form="form"]').addEventListener('submit', event => {
+          event.preventDefault();
+          submit();
+        });
+        refreshIcons();
+      }
+
+      function collect() {
+        const value = id => { const el = panel.querySelector('#tf-' + id); return el ? el.value.trim() : form.data[id]; };
+        ['full_name', 'title', 'authors', 'subject_area', 'academic_year', 'abstract_short'].forEach(key => { form.data[key] = value(key); });
+        const publish = panel.querySelector('input[name="tf-allow_publish"]:checked');
+        if (publish) form.data.allow_publish = publish.value === 'yes';
+      }
+
+      const lines = text => String(text || '').split('\n').map(s => s.trim()).filter(Boolean);
+
+      function validate() {
+        const d = form.data;
+        const errors = [];
+        const fail = (el, message) => { setFieldError(el, message); errors.push(el); };
+        panel.querySelectorAll('[aria-invalid="true"]').forEach(clearFieldError);
+        const field = id => panel.querySelector('#tf-' + id);
+
+        if (!d.full_name) fail(field('full_name'), 'กรุณากรอกชื่อ-นามสกุล');
+        if (!d.title) fail(field('title'), 'กรุณากรอกชื่อเรื่อง');
+        if (!lines(d.authors).length) fail(field('authors'), 'กรุณากรอกชื่อผู้วิจัยอย่างน้อย 1 คน');
+        else if (lines(d.authors).length > 11) fail(field('authors'), 'ผู้วิจัยได้ไม่เกิน 11 คน');
+        if (!d.subject_area) fail(field('subject_area'), 'กรุณากรอกกลุ่มสาระหรือสาขา');
+        const year = Number(d.academic_year);
+        if (!(year >= 2500 && year <= 2700)) fail(field('academic_year'), 'กรุณากรอกปีการศึกษาเป็น พ.ศ. 4 หลัก เช่น 2569');
+        if (!d.abstract_short) fail(field('abstract_short'), 'กรุณากรอกบทคัดย่อสั้น');
+        KINDS.forEach(kind => {
+          const dz = getDropzone(kind);
+          if (!dz.getFile()) { dz.setError('กรุณาเลือกไฟล์นี้'); errors.push(dz.element.querySelector('button')); }
+        });
+        if (d.allow_publish === null) fail(panel.querySelector('input[name="tf-allow_publish"]'), 'กรุณาเลือกว่าอนุญาตให้เผยแพร่หรือไม่');
+
+        if (errors.length) {
+          showAlert('danger', 'กรุณาตรวจสอบข้อมูลที่มีเครื่องหมายแจ้งเตือน (' + errors.length + ' รายการ)');
+          if (errors[0]) errors[0].focus();
+        }
+        return !errors.length;
+      }
+
+      function showAlert(type, message, title) {
+        const box = panel.querySelector('[data-form="alert"]');
+        if (box) box.innerHTML = type ? renderAlert(type, message, title) : '';
+        refreshIcons();
+      }
+
+      function submit() {
+        if (form.submitting) return;
+        collect();
+        if (!validate()) return;
+
+        const d = form.data;
+        const button = panel.querySelector('[data-form="submit"]');
+        form.submitting = true;
+        setButtonLoading(button, true, 'กำลังส่ง...');
+        showAlert('info', 'กำลังอัปโหลดไฟล์ทีละไฟล์ กรุณาอย่าปิดหรือออกจากหน้านี้');
+
+        runSubmissionUpload({
+          state: form,
+          create: () => callServer('createTeacherSubmission', sessionToken(), {
+            full_name: d.full_name, title: d.title, authors: lines(d.authors), subject_area: d.subject_area,
+            abstract_short: d.abstract_short, academic_year: Number(d.academic_year), allow_publish: d.allow_publish
+          }),
+          // ข้อมูลถูกบันทึกแล้ว ล็อกช่องทั้งหมด (ยังเปลี่ยนไฟล์ที่ไม่สำเร็จได้)
+          onCreated: () => panel.querySelectorAll('[data-form="form"] .field-input, input[name="tf-allow_publish"]').forEach(el => { el.disabled = true; }),
+          items: KINDS.map(kind => ({ fileKind: kind, dropzone: getDropzone(kind) }))
+        })
+          .then(result => {
+            form.submitting = false;
+            form.result = result;
+            // ชื่อที่กรอกถูกบันทึกเป็นชื่อของครูแล้ว ให้เมนูด้านบนแสดงชื่อแทนอีเมล
+            if (appState.session && appState.session.name !== d.full_name) setSession(Object.assign({}, appState.session, { name: d.full_name }));
+            if (isCurrent()) renderSuccess(result);
+          })
+          .catch(err => {
+            form.submitting = false;
+            if (!isCurrent() || err.code === 'SESSION_EXPIRED') return;
+            setButtonLoading(button, false);
+            button.textContent = 'ส่งอีกครั้ง';
+            showAlert('danger', err.message, form.submission ? 'ส่งไม่สำเร็จ ไฟล์ที่อัปโหลดแล้วไม่ต้องส่งซ้ำ' : 'ส่งไม่สำเร็จ');
+            panel.scrollIntoView({ block: 'start' });
+          });
+      }
+
+      function renderSuccess(result) {
+        panel.innerHTML = '';
+        panel.appendChild(createSubmissionSuccess({
+          submissionId: result.submissionId,
+          message: 'เราส่งอีเมลยืนยันไปที่ <span class="font-semibold">' + escapeHtml(result.email) + '</span> แล้ว ติดตามสถานะได้ที่แท็บ "งานของฉัน"',
+          actions: [
+            { label: 'ดูงานของฉัน', variant: 'secondary', onClick: () => selectTab('mine') },
+            { label: 'ส่งงานอีกเรื่อง', onClick: () => {
+              Object.assign(form, { submission: null, done: {}, dropzones: {}, result: null });
+              Object.assign(form.data, { title: '', subject_area: '', abstract_short: '', allow_publish: null });
+              renderForm();
+            } }
+          ]
+        }));
+        refreshIcons();
+        panel.scrollIntoView({ block: 'start' });
+      }
+
+      showTab(params.tab === 'mine' ? 'mine' : 'new');
+    }
+  });
+</script>

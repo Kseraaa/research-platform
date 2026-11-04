@@ -1,1 +1,133 @@
-<!-- page_login.html: ขอ OTP / ใส่ OTP (เฟส 4) -->
+<!-- page_login.html: เข้าสู่ระบบด้วย OTP (ขั้น 1 ใส่อีเมล → ขั้น 2 ใส่รหัส 6 หลัก) สำหรับครู ผู้ตรวจ แอดมิน -->
+<script>
+  registerPage('login', {
+    render(container, params, isCurrent) {
+      const DEFAULT_ROUTE = { teacher: 'teacher', reviewer: 'admin', admin: 'admin' };
+      const goAfterLogin = session => {
+        const next = ROUTES[params.next] && params.next !== 'login' ? params.next : DEFAULT_ROUTE[session.role] || 'home';
+        navigate(next, {}, { replace: true });
+      };
+      if (appState.session) {
+        goAfterLogin(appState.session);
+        return;
+      }
+
+      const domain = appConfig.schoolEmailDomain;
+      container.innerHTML =
+        '<section class="container-content section">' +
+          '<div class="card mx-auto max-w-md p-6 md:p-8">' +
+            '<span class="flex h-12 w-12 items-center justify-center rounded-full bg-navy-50 text-navy-500">' + icon('log-in', 'h-6 w-6') + '</span>' +
+            '<h1 class="heading-2 mt-4">เข้าสู่ระบบ</h1>' +
+            '<p class="text-meta mt-1">สำหรับครูในโรงเรียน ผู้ตรวจ และผู้ดูแลระบบ บุคคลภายนอกไม่ต้องเข้าสู่ระบบ ใช้ลิงก์ติดตามสถานะในอีเมลแทน</p>' +
+            '<div class="mt-6" data-login="alert"></div>' +
+            '<div data-login="body"></div>' +
+          '</div>' +
+        '</section>';
+      const $ = name => container.querySelector('[data-login="' + name + '"]');
+      const showAlert = (type, message) => { $('alert').innerHTML = type ? renderAlert(type, message) : ''; refreshIcons(); };
+      let email = '';
+      let countdownTimer = null;
+
+      function showEmailStep() {
+        clearInterval(countdownTimer);
+        $('body').innerHTML =
+          '<form class="flex flex-col gap-4" novalidate data-login="email-form">' +
+            renderField({ id: 'login-email', label: 'อีเมล', type: 'email', required: true, value: email, autocomplete: 'email', maxlength: 254,
+              help: domain ? 'ครูใช้อีเมลของโรงเรียน (@' + domain + ')' : '' }) +
+            '<button type="submit" class="btn-primary">ขอรหัสเข้าสู่ระบบ</button>' +
+          '</form>';
+        const input = container.querySelector('#login-email');
+        input.focus();
+        $('email-form').addEventListener('submit', event => {
+          event.preventDefault();
+          clearFieldError(input);
+          const value = input.value.trim().toLowerCase();
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+            setFieldError(input, 'กรุณากรอกอีเมลให้ถูกต้อง');
+            input.focus();
+            return;
+          }
+          requestCode(value, event.submitter || $('email-form').querySelector('button[type=submit]'));
+        });
+      }
+
+      function requestCode(value, button) {
+        setButtonLoading(button, true, 'กำลังส่งรหัส...');
+        showAlert('');
+        return callServer('requestOtp', value).then(result => {
+          if (!isCurrent()) return;
+          email = value;
+          showCodeStep(result);
+        }).catch(err => {
+          if (!isCurrent()) return;
+          setButtonLoading(button, false);
+          showAlert('danger', err.message);
+        });
+      }
+
+      function showCodeStep(result) {
+        $('body').innerHTML =
+          '<p class="mb-4">' + escapeHtml(result.message) + '</p>' +
+          '<p class="mb-4 text-meta">อีเมล: <span class="font-medium text-ink [overflow-wrap:anywhere]">' + escapeHtml(email) + '</span> ' +
+            '<button type="button" class="link" data-login="change">เปลี่ยนอีเมล</button></p>' +
+          '<form class="flex flex-col gap-4" novalidate data-login="code-form">' +
+            '<div class="field">' +
+              '<label for="login-code" class="field-label">รหัส 6 หลัก <span class="field-required" aria-hidden="true">*</span></label>' +
+              '<input id="login-code" name="code" class="field-input text-center font-heading text-2xl tracking-[0.5em]" inputmode="numeric" ' +
+                'autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" required aria-required="true">' +
+            '</div>' +
+            '<button type="submit" class="btn-primary">เข้าสู่ระบบ</button>' +
+            '<button type="button" class="btn-ghost" data-login="resend"></button>' +
+          '</form>';
+        const input = container.querySelector('#login-code');
+        input.focus();
+        input.addEventListener('input', () => { input.value = input.value.replace(/\D/g, '').slice(0, 6); });
+        $('change').addEventListener('click', showEmailStep);
+        startCountdown(result.resendAfterSec || 60);
+        $('resend').addEventListener('click', () => requestCode(email, $('resend')));
+
+        $('code-form').addEventListener('submit', event => {
+          event.preventDefault();
+          clearFieldError(input);
+          if (!/^\d{6}$/.test(input.value)) {
+            setFieldError(input, 'กรุณากรอกรหัส 6 หลักจากอีเมล');
+            input.focus();
+            return;
+          }
+          const button = $('code-form').querySelector('button[type=submit]');
+          setButtonLoading(button, true, 'กำลังตรวจรหัส...');
+          callServer('verifyOtp', email, input.value).then(session => {
+            if (!isCurrent()) return;
+            clearInterval(countdownTimer);
+            setSession(session);
+            toast('เข้าสู่ระบบแล้ว ยินดีต้อนรับ ' + (session.name || session.email), 'success');
+            goAfterLogin(session);
+          }).catch(err => {
+            if (!isCurrent()) return;
+            setButtonLoading(button, false);
+            setFieldError(input, err.message);
+            input.select();
+          });
+        });
+      }
+
+      function startCountdown(seconds) {
+        clearInterval(countdownTimer);
+        const button = $('resend');
+        let left = seconds;
+        const tick = () => {
+          if (!button.isConnected) return clearInterval(countdownTimer);
+          button.disabled = left > 0;
+          button.textContent = left > 0 ? 'ส่งรหัสอีกครั้งได้ใน ' + left + ' วินาที' : 'ส่งรหัสอีกครั้ง';
+          left -= 1;
+          if (left < 0) clearInterval(countdownTimer);
+        };
+        tick();
+        countdownTimer = setInterval(tick, 1000);
+      }
+
+      showEmailStep();
+      refreshIcons();
+    }
+  });
+</script>

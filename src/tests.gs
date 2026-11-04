@@ -273,6 +273,67 @@ function runSubmissionTests() {
   return runner.finish();
 }
 
+// ---------- test ล็อกอินและงานครู ----------
+
+/**
+ * รันใน editor: OTP (สุ่ม/hash), session + requireRole_, ฟอร์มส่งงานครู
+ * ใช้ CacheService ชั่วคราว (ลบทิ้งหลังทดสอบ) ไม่แตะ Sheets
+ */
+function runAuthTests() {
+  const t = createTestRunner_();
+
+  t.test('รหัส OTP เป็นตัวเลข 6 หลักและสุ่มไม่ซ้ำ', () => {
+    const codes = [];
+    for (let i = 0; i < 20; i++) codes.push(generateOtpCode_());
+    if (!codes.every(c => /^\d{6}$/.test(c))) throw new Error(codes.join());
+    if (codes.filter((c, i) => codes.indexOf(c) === i).length < 18) throw new Error('ซ้ำกันมากผิดปกติ');
+  });
+  t.test('hash OTP ผูกกับอีเมล และไม่ใช่รหัสเดิม', () => {
+    const a = hashOtp_('a@x.ac.th', '123456');
+    if (a !== hashOtp_('a@x.ac.th', '123456')) throw new Error('hash ไม่คงที่');
+    if (a === hashOtp_('b@x.ac.th', '123456')) throw new Error('อีเมลต่างกันได้ hash เดียวกัน');
+    if (a.indexOf('123456') !== -1 || !/^[0-9a-f]{64}$/.test(a)) throw new Error('hash ผิดรูป');
+  });
+
+  const cache = CacheService.getScriptCache();
+  const token = Utilities.getUuid();
+  cache.put(sessionCacheKey_(token), JSON.stringify({ email: 'teacher-test@example.ac.th', role: 'teacher', name: 'ครูทดสอบ' }), 60);
+  try {
+    t.test('ไม่มี token → SESSION_EXPIRED', () => {
+      try { requireRole_('', ['teacher']); } catch (e) { if (e.code === 'SESSION_EXPIRED') return; throw e; }
+      throw new Error('ควร error');
+    });
+    t.test('token มั่ว → SESSION_EXPIRED', () => {
+      try { requireRole_(Utilities.getUuid(), ['teacher']); } catch (e) { if (e.code === 'SESSION_EXPIRED') return; throw e; }
+      throw new Error('ควร error');
+    });
+    t.test('ครูเรียก API ของครูได้', () => {
+      if (requireRole_(token, ['teacher']).email !== 'teacher-test@example.ac.th') throw new Error('email ไม่ตรง');
+    });
+    t.test('ครูเรียก API ของแอดมินไม่ได้', () => t.expectError(() => requireRole_(token, ['admin', 'reviewer']), /ไม่มีสิทธิ์/));
+  } finally {
+    cache.remove(sessionCacheKey_(token));
+  }
+  t.test('logout แล้ว token ใช้ไม่ได้', () => {
+    try { requireRole_(token, ['teacher']); } catch (e) { if (e.code === 'SESSION_EXPIRED') return; throw e; }
+    throw new Error('token ยังใช้ได้');
+  });
+
+  const good = { full_name: 'ครู ทดสอบ', title: 'เรื่อง', authors: ['ครู ทดสอบ', ' ', 'ผู้ร่วม'], subject_area: 'คณิต', abstract_short: 'บทคัดย่อ', academic_year: '2569', allow_publish: true };
+  t.test('ฟอร์มครูถูกต้อง', () => {
+    const d = validateTeacherPayload_(good);
+    if (d.authors.length !== 2 || d.academic_year !== 2569) throw new Error(JSON.stringify(d));
+  });
+  t.test('ฟอร์มครู: บทคัดย่อเกิน 1,500 ตัวอักษร', () => t.expectError(() => validateTeacherPayload_(Object.assign({}, good, { abstract_short: new Array(1502).join('ก') })), /บทคัดย่อ/));
+  t.test('ฟอร์มครู: ปีการศึกษาเป็น ค.ศ.', () => t.expectError(() => validateTeacherPayload_(Object.assign({}, good, { academic_year: 2026 })), /ปีการศึกษา/));
+  t.test('ฟอร์มครู: ไม่มีผู้วิจัย', () => t.expectError(() => validateTeacherPayload_(Object.assign({}, good, { authors: [] })), /ผู้วิจัย/));
+  t.test('ฟอร์มครู: ไม่ได้เลือก allow_publish', () => t.expectError(() => validateTeacherPayload_(Object.assign({}, good, { allow_publish: 'yes' })), /เผยแพร่/));
+  t.test('งานครูต้องมีทั้ง PDF และ Word', () => {
+    if (findMissingFiles_('teacher', ['research_pdf']).join() !== 'research_docx') throw new Error('ไม่ได้บังคับ Word');
+  });
+  return t.finish();
+}
+
 // ---------- test อีเมล ----------
 
 /**

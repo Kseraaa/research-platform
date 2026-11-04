@@ -3,15 +3,38 @@
   // ---------- เรียก server ----------
 
   /**
-   * เรียก public API ฝั่ง server คืน Promise ของ data (reject เป็น Error ข้อความภาษาไทย)
+   * เรียก public API ฝั่ง server คืน Promise ของ data (reject เป็น Error ข้อความภาษาไทย มี err.code ถ้า server ส่งมา)
+   * session หมดอายุ (code SESSION_EXPIRED): ล้าง session แล้วพาไปหน้าเข้าสู่ระบบ
    */
   function callServer(fn, ...args) {
     return new Promise((resolve, reject) => {
       google.script.run
-        .withSuccessHandler(res => res && res.ok ? resolve(res.data) : reject(new Error(res ? res.error : 'ไม่มีการตอบกลับ')))
+        .withSuccessHandler(res => {
+          if (res && res.ok) return resolve(res.data);
+          const err = new Error(res ? res.error : 'ไม่มีการตอบกลับ');
+          err.code = res && res.code;
+          if (err.code === 'SESSION_EXPIRED') handleSessionExpired(err.message);
+          reject(err);
+        })
         .withFailureHandler(() => reject(new Error('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่')))
         [fn](...args);
     });
+  }
+
+  function handleSessionExpired(message) {
+    if (!appState.session) return;
+    const from = appState.route;
+    clearSession();
+    // อยู่หน้าสาธารณะ: แค่ออกจากระบบเงียบๆ / หน้าที่ต้องล็อกอิน: แจ้งแล้วพาไปเข้าสู่ระบบ
+    if (ROUTES[from] && ROUTES[from].roles) {
+      toast(message || 'กรุณาเข้าสู่ระบบอีกครั้ง', 'warning');
+      navigate('login', { next: from }, { replace: true });
+    }
+  }
+
+  /** token ของ session ปัจจุบัน (ส่งเป็นอาร์กิวเมนต์แรกของ API ที่ต้องล็อกอิน) */
+  function sessionToken() {
+    return appState.session ? appState.session.token : '';
   }
 
   // ---------- util ----------
@@ -358,8 +381,10 @@
         return;
       }
       if (event.target.closest('[data-action="logout"]')) {
-        // เฟส 4: เรียก callServer('logout', token) ก่อนล้าง session
+        // ล้างฝั่งเบราว์เซอร์ทันที ฝั่ง server ลบ session ตามหลัง (ล้มเหลวก็ไม่เป็นไร session หมดอายุเองใน 6 ชม.)
+        callServer('logout', sessionToken()).catch(() => {});
         clearSession();
+        toast('ออกจากระบบแล้ว', 'success');
         navigate('home');
       }
     });
@@ -386,5 +411,12 @@
 
     const initial = readBodyJson('params');
     navigate(initial.page || 'home', initial, { replace: true });
+
+    // session ที่ค้างใน sessionStorage อาจหมดอายุฝั่ง server แล้ว ตรวจเบื้องหลัง (หมดอายุ → callServer พาไปหน้าเข้าสู่ระบบ)
+    if (appState.session) {
+      callServer('getMe', sessionToken()).then(me => {
+        if (appState.session) setSession(Object.assign({}, appState.session, me));
+      }).catch(() => {});
+    }
   }
 </script>

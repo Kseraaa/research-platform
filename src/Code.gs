@@ -64,14 +64,20 @@ function wrapApi_(fn) {
     return { ok: true, data: fn() };
   } catch (e) {
     console.error(e && e.stack || e);
-    return { ok: false, error: e && e.userMessage ? e.userMessage : 'เกิดข้อผิดพลาด กรุณาลองใหม่' };
+    const result = { ok: false, error: e && e.userMessage ? e.userMessage : 'เกิดข้อผิดพลาด กรุณาลองใหม่' };
+    if (e && e.code) result.code = e.code;
+    return result;
   }
 }
 
-/** สร้าง error ที่ข้อความแสดงให้ผู้ใช้เห็นได้ (ภาษาไทย) */
-function userError_(msg) {
+/**
+ * สร้าง error ที่ข้อความแสดงให้ผู้ใช้เห็นได้ (ภาษาไทย)
+ * code (ไม่บังคับ) ให้ client แยกกรณีได้โดยไม่ต้องเทียบข้อความ เช่น 'SESSION_EXPIRED'
+ */
+function userError_(msg, code) {
   const e = new Error(msg);
   e.userMessage = msg;
+  if (code) e.code = code;
   return e;
 }
 

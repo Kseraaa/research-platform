@@ -266,11 +266,6 @@
 
       // ---------- ส่ง ----------
 
-      function warnBeforeLeave(event) {
-        event.preventDefault();
-        event.returnValue = '';
-      }
-
       function submit() {
         if (reg.submitting) return;
         collect();
@@ -284,34 +279,19 @@
         const editButtons = Array.from(root.querySelectorAll('[data-goto]'));
         editButtons.forEach(btn => { btn.disabled = true; });
         showAlert('info', 'กำลังอัปโหลดไฟล์ทีละไฟล์ กรุณาอย่าปิดหรือออกจากหน้านี้');
-        window.addEventListener('beforeunload', warnBeforeLeave);
 
-        const create = reg.submission
-          ? Promise.resolve(reg.submission)
-          : callServer('createSubmission', {
-              type: d.type, full_name: d.full_name, email: d.email, phone: d.phone, organization: d.organization,
-              title: d.title, co_authors: splitLines(d.co_authors), subject_area: d.subject_area,
-              pdpa_consent: d.pdpa, allow_publish: d.allow_publish
-            }).then(created => {
-              reg.submission = created;
-              root.querySelectorAll('[data-goto]').forEach(btn => btn.remove()); // ข้อมูลถูกบันทึกแล้ว แก้ไม่ได้
-              return created;
-            });
-
-        create
-          .then(created => uploadFilesInOrder({
-            submissionId: created.submissionId,
-            uploadKey: created.uploadKey,
-            items: appConfig.requiredFiles[d.type].map(kind => ({ fileKind: kind, dropzone: getDropzone(kind) })),
-            done: reg.done
-          }))
-          .then(() => callServer('finalizeSubmission', reg.submission.submissionId, reg.submission.uploadKey))
-          .then(result => {
-            window.removeEventListener('beforeunload', warnBeforeLeave);
-            if (isCurrent()) renderSuccess(result);
-          })
+        runSubmissionUpload({
+          state: reg,
+          create: () => callServer('createSubmission', {
+            type: d.type, full_name: d.full_name, email: d.email, phone: d.phone, organization: d.organization,
+            title: d.title, co_authors: splitLines(d.co_authors), subject_area: d.subject_area,
+            pdpa_consent: d.pdpa, allow_publish: d.allow_publish
+          }),
+          onCreated: () => root.querySelectorAll('[data-goto]').forEach(btn => btn.remove()), // ข้อมูลถูกบันทึกแล้ว แก้ไม่ได้
+          items: appConfig.requiredFiles[d.type].map(kind => ({ fileKind: kind, dropzone: getDropzone(kind) }))
+        })
+          .then(result => { if (isCurrent()) renderSuccess(result); })
           .catch(err => {
-            window.removeEventListener('beforeunload', warnBeforeLeave);
             reg.submitting = false;
             if (!isCurrent()) return;
             setButtonLoading(button, false);
@@ -324,30 +304,13 @@
       }
 
       function renderSuccess(result) {
-        root.innerHTML =
-          '<div class="card flex flex-col items-center gap-3 px-6 py-12 text-center" role="status">' +
-            '<span class="flex h-16 w-16 items-center justify-center rounded-full bg-success-bg text-success-fg">' + icon('circle-check', 'h-8 w-8') + '</span>' +
-            '<h2 class="heading-2 mt-2">ส่งผลงานเรียบร้อยแล้ว</h2>' +
-            '<p class="text-meta">รหัสงานของคุณ</p>' +
-            '<p class="font-heading text-3xl font-bold tracking-wide text-navy-700 md:text-5xl" data-reg="code">' + escapeHtml(result.submissionId) + '</p>' +
-            '<button type="button" class="btn-secondary" data-reg="copy">' + icon('copy', 'h-4 w-4') + 'คัดลอกรหัสงาน</button>' +
-            '<p class="mt-4 max-w-md">เราส่งลิงก์ติดตามสถานะไปที่อีเมล <span class="font-semibold break-all">' + escapeHtml(result.email) + '</span> แล้ว ' +
-              'หากไม่พบ กรุณาตรวจในโฟลเดอร์จดหมายขยะ</p>' +
-            '<p class="text-meta max-w-md">เก็บรหัสงานนี้ไว้ใช้อ้างอิงเมื่อติดต่อหน่วยส่งเสริมงานวิจัย</p>' +
-            '<a href="#" data-route="home" class="btn-ghost mt-4">กลับหน้าหลัก</a>' +
-          '</div>';
-        $('copy').addEventListener('click', () => {
-          const done = () => toast('คัดลอกรหัสงานแล้ว', 'success');
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(result.submissionId).then(done, () => toast('คัดลอกไม่สำเร็จ กรุณาจดรหัสงานไว้', 'warning'));
-          } else {
-            const range = document.createRange();
-            range.selectNodeContents($('code'));
-            window.getSelection().removeAllRanges();
-            window.getSelection().addRange(range);
-            toast('เลือกรหัสงานแล้ว กด Ctrl+C เพื่อคัดลอก', 'info');
-          }
-        });
+        root.innerHTML = '';
+        root.appendChild(createSubmissionSuccess({
+          submissionId: result.submissionId,
+          message: 'เราส่งลิงก์ติดตามสถานะไปที่อีเมล <span class="font-semibold">' + escapeHtml(result.email) + '</span> แล้ว หากไม่พบ กรุณาตรวจในโฟลเดอร์จดหมายขยะ',
+          hint: 'เก็บรหัสงานนี้ไว้ใช้อ้างอิงเมื่อติดต่อหน่วยส่งเสริมงานวิจัย',
+          actions: [{ label: 'กลับหน้าหลัก', route: 'home' }]
+        }));
         refreshIcons();
         root.scrollIntoView({ block: 'start' });
       }

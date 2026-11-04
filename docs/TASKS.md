@@ -65,10 +65,10 @@
 
 ## เฟส 4: ล็อกอินครู + ส่งงานครู
 
-- [ ] `auth.gs`: `requestOtp`, `verifyOtp`, `logout`, `requireRole_` + rate limit ตาม ARCHITECTURE.md ข้อ 5
-- [ ] `page_login.html`: ขั้นใส่อีเมล → ขั้นใส่รหัส 6 หลัก
-- [ ] `page_teacher.html`: ฟอร์มส่งงานวิจัย (reuse flow อัปโหลดจากเฟส 2) + รายการ "งานของฉัน" พร้อมสถานะ
-- [ ] nav แสดงเมนูตาม role
+- [x] `auth.gs`: `requestOtp`, `verifyOtp`, `logout`, `requireRole_` + rate limit ตาม ARCHITECTURE.md ข้อ 5
+- [x] `page_login.html`: ขั้นใส่อีเมล → ขั้นใส่รหัส 6 หลัก
+- [x] `page_teacher.html`: ฟอร์มส่งงานวิจัย (reuse flow อัปโหลดจากเฟส 2) + รายการ "งานของฉัน" พร้อมสถานะ
+- [x] nav แสดงเมนูตาม role
 
 > **Prompt:** ทำเฟส 4 ใน docs/TASKS.md reuse โค้ดอัปโหลดจากเฟส 2 ห้ามเขียนซ้ำ
 

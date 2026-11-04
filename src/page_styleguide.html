@@ -125,6 +125,7 @@
       <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-sg="shortcuts"></div>
       <div class="mt-4 rounded-card bg-navy-800 px-4 pb-6 pt-1" data-sg="search"></div>
       <div class="card mt-4 flex flex-col gap-4 p-6 text-body" data-sg="paragraphs"></div>
+      <div class="mt-4" data-sg="success"></div>
     </section>
 
     <section aria-labelledby="sg-nav">
@@ -298,6 +299,13 @@
       slot('search').innerHTML = renderSearchBox({ id: 'sg-search', label: 'ค้นหาเอกสาร', placeholder: 'ค้นหาจากชื่อเอกสารหรือผู้จัดทำ' });
       slot('search').querySelector('form').addEventListener('submit', e => { e.preventDefault(); toast('ค้นหา: ' + e.target.q.value, 'info'); });
       slot('paragraphs').innerHTML = renderParagraphs('ย่อหน้าแรก\nบรรทัดที่สองในย่อหน้าเดียวกัน\n\nย่อหน้าที่สองมีลิงก์ https://www.google.com, และ <b>แท็ก HTML ที่ต้องไม่ทำงาน</b>');
+
+      slot('success').appendChild(createSubmissionSuccess({
+        submissionId: 'SUB-2026-0001',
+        message: 'เราส่งลิงก์ติดตามสถานะไปที่อีเมล <span class="font-semibold">name@example.com</span> แล้ว',
+        hint: 'เก็บรหัสงานนี้ไว้ใช้อ้างอิง',
+        actions: [{ label: 'กลับหน้าหลัก', route: 'home' }, { label: 'ปุ่มแบบ onClick', variant: 'secondary', onClick: () => toast('กดแล้ว', 'info') }]
+      }));
 
       // แท็บ + pagination
       const tabsOutput = slot('tabs-output');

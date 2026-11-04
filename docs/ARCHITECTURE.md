@@ -121,6 +121,16 @@ function getMySubmissions(sessionToken) {
 3. ทุก API ที่ต้องล็อกอินรับ `sessionToken` เป็นพารามิเตอร์แรก แล้วเรียก `requireRole_()`
 4. role: อยู่ใน `ADMINS` (active) → `admin`/`reviewer` ไม่อย่างนั้น โดเมนโรงเรียน → `teacher`
 
+รายละเอียดที่ทำไว้ (เฟส 4, `auth.gs`):
+- OTP สุ่มจาก SHA-256 ของ UUID เก็บเฉพาะ hash (ผูกกับอีเมล) ใช้ได้ครั้งเดียว นับครั้งที่ผิดภายใต้ lock
+- จำกัดการขอรหัสกับ**ทุก**อีเมล (รวมที่ไม่มีสิทธิ์) จึงใช้ข้อความ "ขอบ่อยเกินไป" แยกอีเมลที่มีสิทธิ์ไม่ได้
+- `requireRole_()` ของ admin/reviewer ตรวจแท็บ `ADMINS` ซ้ำทุกครั้ง ถอดสิทธิ์แล้วมีผลทันที
+- session หมดอายุ/ไม่มี: error มี `code: 'SESSION_EXPIRED'` (`userError_(msg, code)` + `wrapApi_` ส่ง `code` ไปด้วย) `callServer` ล้าง session แล้วพาไปหน้าเข้าสู่ระบบ (เฉพาะหน้าที่ต้องล็อกอิน)
+- เปิดหน้าเว็บพร้อม session ใน `sessionStorage` → ตรวจด้วย `getMe()` เบื้องหลัง / ออกจากระบบเรียก `logout()` ลบ session ฝั่ง server
+- ครูที่ยังไม่เคยส่งงานไม่มีชื่อในระบบ (แสดงอีเมลแทน) ชื่อบันทึกใน `PRESENTERS` ตอนส่งงานครั้งแรก
+
+งานครู: `createTeacherSubmission(sessionToken, payload)` → `uploadFile` / `finalizeSubmission` ชุดเดียวกับบุคคลภายนอก (ทั้งสองใช้ `createDraftSubmission_()`) / `getMySubmissions(sessionToken)` ฝั่ง client ใช้ `runSubmissionUpload()` (js_upload.html) และ `createSubmissionSuccess()` (js_ui.html) ร่วมกับหน้าลงทะเบียน
+
 (ทางเลือกภายหลัง: ถ้า deploy จากบัญชี Workspace โรงเรียน อาจลองใช้ `Session.getActiveUser()` ระบุครูอัตโนมัติ แต่ผลขึ้นกับนโยบายโดเมนและการตั้งค่า access จึงไม่ใช้เป็นวิธีหลัก)
 
 ## 6. การอัปโหลดไฟล์

@@ -40,31 +40,86 @@ function createSubmission(payload) {
     const data = validateRegistrationPayload_(payload);
     checkCreateRateLimit_(data.email);
 
-    const submission = withLock_(() => {
-      const presenter = upsertExternalPresenter_(data);
-      const submissionId = nextSubmissionId_();
-      const folder = createSubmissionFolder_(submissionId, data.type, submissionId.split('-')[1]);
-      return insert_('SUBMISSIONS', {
-        submission_id: submissionId,
-        event_id: event.event_id,
-        presenter_id: presenter.presenter_id,
-        type: data.type,
-        title: data.title,
-        authors: [data.full_name].concat(data.co_authors),
-        subject_area: data.subject_area,
-        abstract_short: '',
-        academic_year: event.year,
-        status: STATUSES.DRAFT,
-        allow_publish: data.allow_publish,
-        track_token: Utilities.getUuid(),
-        reviewer_note: '',
-        drive_folder_id: folder.getId(),
-        submitted_at: ''
-      });
+    return createDraftSubmission_(() => upsertExternalPresenter_(data), {
+      event_id: event.event_id,
+      type: data.type,
+      title: data.title,
+      authors: [data.full_name].concat(data.co_authors),
+      subject_area: data.subject_area,
+      abstract_short: '',
+      academic_year: event.year,
+      allow_publish: data.allow_publish
     });
-
-    return { submissionId: submission.submission_id, uploadKey: issueUploadKey_(submission.submission_id) };
   });
+}
+
+/**
+ * ครูส่งงานวิจัย (ต้องล็อกอิน) ขั้นต่อไปใช้ uploadFile / finalizeSubmission ชุดเดียวกับบุคคลภายนอก
+ * @param {Object} payload { full_name, title, authors[], subject_area, abstract_short, academic_year, allow_publish }
+ * @return {{ submissionId: string, uploadKey: string }}
+ */
+function createTeacherSubmission(sessionToken, payload) {
+  return wrapApi_(() => {
+    const user = requireRole_(sessionToken, [ROLES.TEACHER]);
+    const data = validateTeacherPayload_(payload);
+    checkCreateRateLimit_(user.email);
+    const event = getCurrentEvent_();
+
+    return createDraftSubmission_(() => upsertTeacherPresenter_(user.email, data.full_name), {
+      event_id: event ? event.event_id : '',
+      type: SUBMISSION_TYPES.TEACHER,
+      title: data.title,
+      authors: data.authors,
+      subject_area: data.subject_area,
+      abstract_short: data.abstract_short,
+      academic_year: data.academic_year,
+      allow_publish: data.allow_publish
+    });
+  });
+}
+
+/**
+ * งานของฉัน: ทุกงานที่ส่งด้วยอีเมลนี้ (ไม่รวม draft) ใหม่ไปเก่า
+ */
+function getMySubmissions(sessionToken) {
+  return wrapApi_(() => {
+    const user = requireRole_(sessionToken, [ROLES.TEACHER]);
+    const presenter = findBy_('PRESENTERS', 'email', user.email);
+    if (!presenter) return [];
+    return readAll_('SUBMISSIONS')
+      .filter(s => s.presenter_id === presenter.presenter_id && s.status !== STATUSES.DRAFT)
+      .sort((a, b) => toTime_(b.submitted_at) - toTime_(a.submitted_at))
+      .map(s => ({
+        submission_id: s.submission_id,
+        title: s.title,
+        type: s.type,
+        status: s.status,
+        reviewer_note: s.reviewer_note,
+        submitted_at: s.submitted_at
+      }));
+  });
+}
+
+/**
+ * สร้าง presenter (ผ่าน upsertPresenter) + SUBMISSIONS สถานะ draft + โฟลเดอร์ Drive ภายใต้ lock
+ * @return {{ submissionId: string, uploadKey: string }}
+ */
+function createDraftSubmission_(upsertPresenter, fields) {
+  const submission = withLock_(() => {
+    const presenter = upsertPresenter();
+    const submissionId = nextSubmissionId_();
+    const folder = createSubmissionFolder_(submissionId, fields.type, submissionId.split('-')[1]);
+    return insert_('SUBMISSIONS', Object.assign({}, fields, {
+      submission_id: submissionId,
+      presenter_id: presenter.presenter_id,
+      status: STATUSES.DRAFT,
+      track_token: Utilities.getUuid(),
+      reviewer_note: '',
+      drive_folder_id: folder.getId(),
+      submitted_at: ''
+    }));
+  });
+  return { submissionId: submission.submission_id, uploadKey: issueUploadKey_(submission.submission_id) };
 }
 
 /**
@@ -305,6 +360,46 @@ function validateRegistrationPayload_(payload) {
   };
 }
 
+/**
+ * ตรวจ payload ฟอร์มส่งงานครู (ไม่แตะ Sheets ใช้ทดสอบใน tests.gs ได้)
+ */
+function validateTeacherPayload_(payload) {
+  const p = asObject_(payload);
+  const errors = [];
+  const fullName = cleanText_(p.full_name, 200);
+  if (!fullName) errors.push('กรุณากรอกชื่อ-นามสกุล');
+
+  const title = cleanText_(p.title, LIMITS.TITLE_MAX);
+  if (!title) errors.push('กรุณากรอกชื่อเรื่อง');
+
+  const authors = (Array.isArray(p.authors) ? p.authors : []).map(name => cleanText_(name, 200)).filter(Boolean);
+  if (!authors.length) errors.push('กรุณากรอกชื่อผู้วิจัยอย่างน้อย 1 คน');
+  if (authors.length > MAX_CO_AUTHORS + 1) errors.push('ผู้วิจัยได้ไม่เกิน ' + (MAX_CO_AUTHORS + 1) + ' คน');
+
+  const subjectArea = cleanText_(p.subject_area, 100);
+  if (!subjectArea) errors.push('กรุณากรอกกลุ่มสาระ/สาขา');
+
+  const abstractShort = cleanText_(p.abstract_short, LIMITS.ABSTRACT_SHORT_MAX + 1);
+  if (!abstractShort) errors.push('กรุณากรอกบทคัดย่อสั้น');
+  if (abstractShort.length > LIMITS.ABSTRACT_SHORT_MAX) errors.push('บทคัดย่อยาวเกิน ' + LIMITS.ABSTRACT_SHORT_MAX + ' ตัวอักษร');
+
+  const academicYear = Math.floor(Number(p.academic_year));
+  if (!(academicYear >= 2500 && academicYear <= 2700)) errors.push('ปีการศึกษาต้องเป็น พ.ศ. 4 หลัก เช่น 2569');
+
+  if (typeof p.allow_publish !== 'boolean') errors.push('กรุณาเลือกว่าอนุญาตให้เผยแพร่หรือไม่');
+
+  if (errors.length) throw userError_(errors.join(' / '));
+  return {
+    full_name: fullName,
+    title: title,
+    authors: authors,
+    subject_area: subjectArea,
+    abstract_short: abstractShort,
+    academic_year: academicYear,
+    allow_publish: p.allow_publish
+  };
+}
+
 function isRegistrationOpen_(event, now) {
   if (!event || !event.open_date || !event.close_date) return false;
   const t = (now || new Date()).getTime();
@@ -341,6 +436,24 @@ function upsertExternalPresenter_(data) {
     phone: data.phone,
     organization: data.organization,
     pdpa_consent_at: now
+  });
+}
+
+/** ครู: ใช้อีเมลจาก session ชื่ออัปเดตตามที่กรอกล่าสุด (เรียกภายใต้ lock) */
+function upsertTeacherPresenter_(email, fullName) {
+  const existing = findBy_('PRESENTERS', 'email', email);
+  if (existing) {
+    return existing.full_name === fullName
+      ? existing
+      : updateBy_('PRESENTERS', 'presenter_id', existing.presenter_id, { full_name: fullName });
+  }
+  return insert_('PRESENTERS', {
+    presenter_id: newId_('PRE'),
+    role: ROLES.TEACHER,
+    full_name: fullName,
+    email: email,
+    phone: '',
+    organization: SCHOOL_NAME
   });
 }
 

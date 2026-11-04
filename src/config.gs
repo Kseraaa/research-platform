@@ -214,7 +214,8 @@ function getClientConfig_() {
     typeLabels: TYPE_LABELS_TH,
     fileKinds: FILE_KIND_SPECS,
     requiredFiles: REQUIRED_FILES,
-    maxFileMb: getConfig_().MAX_FILE_MB
+    maxFileMb: getConfig_().MAX_FILE_MB,
+    schoolEmailDomain: getConfig_().SCHOOL_EMAIL_DOMAIN
   };
 }
 

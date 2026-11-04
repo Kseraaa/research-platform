@@ -50,6 +50,28 @@
   }
 
   /**
+   * flow ส่งงานทั้งหมด: สร้างงาน (ครั้งเดียว) → อัปโหลดไฟล์ที่ยังไม่สำเร็จ → finalize
+   * กดส่งซ้ำหลังล้มเหลวได้: ไม่สร้างงานซ้ำ ไม่ส่งไฟล์ที่สำเร็จแล้วซ้ำ เตือนก่อนปิดแท็บระหว่างส่ง
+   * @param {{ state: { submission, done }, create: () => Promise<{ submissionId, uploadKey }>, items: { fileKind, dropzone }[], onCreated? }} o
+   * @return Promise<{ submissionId, email }> ผลจาก finalizeSubmission
+   */
+  function runSubmissionUpload(o) {
+    const warn = event => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    const created = o.state.submission
+      ? Promise.resolve(o.state.submission)
+      : o.create().then(submission => {
+          o.state.submission = submission;
+          if (o.onCreated) o.onCreated(submission);
+          return submission;
+        });
+    return created
+      .then(s => uploadFilesInOrder({ submissionId: s.submissionId, uploadKey: s.uploadKey, items: o.items, done: o.state.done }))
+      .then(() => callServer('finalizeSubmission', o.state.submission.submissionId, o.state.submission.uploadKey))
+      .finally(() => window.removeEventListener('beforeunload', warn));
+  }
+
+  /**
    * อัปโหลดหลายไฟล์ตามลำดับ ข้ามไฟล์ที่สำเร็จแล้ว (ใน done) เพื่อให้กดลองใหม่ได้โดยไม่ส่งซ้ำ
    * @param {{ submissionId, uploadKey, items: { fileKind, dropzone }[], done: Object, uploadFn? }} o
    *   uploadFn: ฟังก์ชันฝั่ง server (ค่าเริ่มต้น 'uploadFile') อาร์กิวเมนต์แรกคือ submissionId
