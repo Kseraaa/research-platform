@@ -35,6 +35,7 @@ claude
 2. `clasp open-script` → เลือกฟังก์ชัน `setup` → Run → อนุญาตสิทธิ์
 3. Project Settings → Script Properties เพิ่ม `RESEND_API_KEY`, `EMAIL_FROM`, `ADMIN_NOTIFY_EMAIL`, `SCHOOL_EMAIL_DOMAIN`, `MAX_FILE_MB`
 4. เพิ่มอีเมลตัวเองในแท็บ `ADMINS` ของสเปรดชีตที่ `setup()` สร้าง (role = `admin`, active = `TRUE`)
+   - (ไม่บังคับ) รัน `seedSampleData` เพื่อใส่ข้อมูลตัวอย่างไว้ทดสอบหน้าเว็บ ลบทิ้งด้วย `clearSampleData` (ลบเฉพาะแถวที่ ID มีคำว่า `SAMPLE`)
 5. Deploy → Test deployments → คัดลอก URL `/dev` ไปทดสอบ
 6. ตอน deploy จริง: Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone) แล้วนำ URL `/exec` ไปใส่ใน Script Property `WEBAPP_URL`
 

@@ -495,13 +495,22 @@
     return '<div aria-busy="true"><span class="sr-only" role="status">กำลังโหลด...</span>' + body + '</div>';
   }
 
-  /** renderEmptyState({ icon, title, message, actionLabel, actionRoute }) */
+  /**
+   * renderEmptyState({ icon, title, message, actionLabel, actionRoute | actionName })
+   * actionRoute → ลิงก์ไปหน้าอื่น / actionName → ปุ่ม data-action="ชื่อ" ให้หน้านั้นดักคลิกเอง
+   */
   function renderEmptyState(o) {
+    let action = '';
+    if (o.actionLabel && o.actionRoute) {
+      action = '<a href="#" data-route="' + escapeHtml(o.actionRoute) + '" class="btn-secondary mt-4">' + escapeHtml(o.actionLabel) + '</a>';
+    } else if (o.actionLabel && o.actionName) {
+      action = '<button type="button" data-action="' + escapeHtml(o.actionName) + '" class="btn-secondary mt-4">' + escapeHtml(o.actionLabel) + '</button>';
+    }
     return '<div class="card flex flex-col items-center gap-2 px-6 py-12 text-center">' +
       '<span class="flex h-14 w-14 items-center justify-center rounded-full bg-navy-50 text-navy-500">' + icon(o.icon || 'inbox', 'h-7 w-7') + '</span>' +
       '<p class="heading-3 mt-2">' + escapeHtml(o.title) + '</p>' +
       (o.message ? '<p class="text-meta max-w-md">' + escapeHtml(o.message) + '</p>' : '') +
-      (o.actionLabel && o.actionRoute ? '<a href="#" data-route="' + escapeHtml(o.actionRoute) + '" class="btn-secondary mt-4">' + escapeHtml(o.actionLabel) + '</a>' : '') +
+      action +
     '</div>';
   }
 
@@ -633,6 +642,87 @@
       '<a class="btn-secondary mt-auto" href="' + escapeHtml(documentDownloadUrl(doc.drive_file_id)) + '" target="_blank" rel="noopener">' +
         icon('download', 'h-4 w-4') + 'ดาวน์โหลด<span class="sr-only"> ' + escapeHtml(doc.title) + '</span></a>' +
     '</article>';
+  }
+
+  // ---------- การ์ดข่าว + การ์ดทางลัด + หัวหน้า + ช่องค้นหา ----------
+
+  /** renderNewsCard({ news_id, title, summary, cover_url, published_at, pinned }) ทั้งใบกดได้ */
+  function renderNewsCard(news) {
+    const cover = news.cover_url
+      ? '<img src="' + escapeHtml(news.cover_url) + '" alt="" loading="lazy" class="aspect-video w-full object-cover">'
+      : '<div class="image-placeholder aspect-video w-full">ภาพกิจกรรม</div>';
+    return '<article class="card card-hover relative flex flex-col overflow-hidden">' +
+      cover +
+      '<div class="flex flex-1 flex-col gap-2 p-4">' +
+        '<p class="flex items-center gap-2 text-meta">' +
+          (news.pinned ? '<span class="badge bg-gold-50 text-gold-700">' + icon('pin', 'h-3.5 w-3.5') + 'ปักหมุด</span>' : '') +
+          '<time datetime="' + escapeHtml(news.published_at) + '">' + escapeHtml(formatThaiDate(news.published_at)) + '</time></p>' +
+        '<h3 class="heading-3 line-clamp-2">' +
+          '<a href="#" data-route="news" data-param-id="' + escapeHtml(news.news_id) + '" class="after:absolute after:inset-0 hover:text-navy-500">' + escapeHtml(news.title) + '</a>' +
+        '</h3>' +
+        (news.summary ? '<p class="text-meta line-clamp-2">' + escapeHtml(news.summary) + '</p>' : '') +
+      '</div>' +
+    '</article>';
+  }
+
+  /** renderShortcutCard({ icon, title, description, route }) การ์ดทางลัดหน้าแรก ทั้งใบกดได้ */
+  function renderShortcutCard(o) {
+    return '<a href="#" data-route="' + escapeHtml(o.route) + '" class="card card-hover flex gap-4 p-5 hover:border-navy-200">' +
+      '<span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-navy-50 text-navy-500">' + icon(o.icon, 'h-6 w-6') + '</span>' +
+      '<span class="flex flex-col gap-1">' +
+        '<span class="heading-3">' + escapeHtml(o.title) + '</span>' +
+        '<span class="text-meta">' + escapeHtml(o.description) + '</span>' +
+      '</span>' +
+    '</a>';
+  }
+
+  /** หัวหน้า (พื้นกรมท่า) ของหน้ารอง: renderPageHero({ title, description, eyebrow }) + เนื้อหาเพิ่มเติม (HTML) */
+  function renderPageHero(o, extraHtml) {
+    return '<section class="bg-navy-800 text-white">' +
+      '<div class="container-content py-10 md:py-14">' +
+        (o.eyebrow ? '<p class="text-label text-gold-400">' + escapeHtml(o.eyebrow) + '</p>' : '') +
+        '<h1 class="heading-1">' + escapeHtml(o.title) + '</h1>' +
+        (o.description ? '<p class="mt-2 max-w-2xl text-navy-100">' + escapeHtml(o.description) + '</p>' : '') +
+        (extraHtml || '') +
+      '</div>' +
+    '</section>';
+  }
+
+  /** ช่องค้นหาบนพื้นกรมท่า: renderSearchBox({ id, label, placeholder, value }) คืน <form> */
+  function renderSearchBox(o) {
+    return '<form role="search" class="mt-6 flex max-w-2xl gap-2" data-search-form>' +
+      '<label for="' + escapeHtml(o.id) + '" class="sr-only">' + escapeHtml(o.label) + '</label>' +
+      '<div class="relative flex-1">' +
+        '<span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-ink-subtle">' + icon('search') + '</span>' +
+        '<input type="search" id="' + escapeHtml(o.id) + '" name="q" class="field-input pl-10" placeholder="' + escapeHtml(o.placeholder || '') + '" value="' + escapeHtml(o.value || '') + '" maxlength="100" autocomplete="off">' +
+      '</div>' +
+      '<button type="submit" class="btn-primary">ค้นหา</button>' +
+    '</form>';
+  }
+
+  const URL_PATTERN = /https?:\/\/[^\s<>"']+/g;
+
+  /**
+   * ข้อความธรรมดา → ย่อหน้า <p> (แบ่งด้วยบรรทัดว่าง) บรรทัดเดียวขึ้น <br> และแปลง URL http/https เป็นลิงก์
+   * ทุกส่วน escape ก่อน จึงใช้กับเนื้อหาข่าวที่แอดมินพิมพ์ได้ปลอดภัย
+   */
+  function renderParagraphs(text) {
+    const linkify = line => {
+      let html = '';
+      let last = 0;
+      line.replace(URL_PATTERN, (url, index) => {
+        const clean = url.replace(/[.,)]+$/, '');
+        html += escapeHtml(line.slice(last, index)) +
+          '<a href="' + escapeHtml(clean) + '" target="_blank" rel="noopener noreferrer" class="link break-all">' + escapeHtml(clean) + '</a>';
+        last = index + clean.length;
+        return url;
+      });
+      return html + escapeHtml(line.slice(last));
+    };
+    return String(text || '').replace(/\r\n/g, '\n').split(/\n\s*\n/)
+      .map(p => p.trim()).filter(Boolean)
+      .map(p => '<p>' + p.split('\n').map(linkify).join('<br>') + '</p>')
+      .join('');
   }
 
   const YOUTUBE_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;

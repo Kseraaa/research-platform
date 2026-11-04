@@ -1,1 +1,131 @@
-<!-- page_home.html: หน้าแรก (เฟส 1) -->
+<!-- page_home.html: หน้าแรก (hero + กล่องสรุปรอบกิจกรรม, ทางลัด 4 การ์ด, Timeline ย่อ, ข่าวล่าสุด) ดู docs/DESIGN.md ข้อ 6 -->
+<template id="tpl-home">
+  <section class="bg-navy-800 text-white">
+    <div class="container-content grid gap-10 py-12 md:py-20 lg:grid-cols-[1fr_400px] lg:items-center">
+      <div>
+        <p class="text-label text-gold-400">หน่วยส่งเสริมงานวิจัย โรงเรียน มอ.วิทยานุสรณ์</p>
+        <h1 class="heading-1 mt-2">ศูนย์รวมงานวิจัยชั้นเรียน</h1>
+        <p class="mt-4 max-w-xl text-lg text-navy-100">ส่งงานวิจัย ลงทะเบียนนำเสนอผลงาน ติดตามกำหนดการ และค้นคว้าคลังงานวิจัยของครู ได้ในที่เดียว</p>
+        <div class="mt-8 flex flex-wrap gap-3" data-home="hero-actions"></div>
+      </div>
+      <div data-home="event"></div>
+    </div>
+  </section>
+
+  <section class="container-content section" aria-labelledby="home-shortcuts">
+    <h2 id="home-shortcuts" class="heading-2">เริ่มต้นใช้งาน</h2>
+    <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-home="shortcuts"></div>
+  </section>
+
+  <section class="bg-surface" aria-labelledby="home-timeline">
+    <div class="container-content section">
+      <div class="flex flex-wrap items-end justify-between gap-2">
+        <h2 id="home-timeline" class="heading-2">กำหนดการ</h2>
+        <a href="#" data-route="timeline" class="link">ดูกำหนดการทั้งหมด</a>
+      </div>
+      <div class="mt-6 max-w-3xl" data-home="timeline"></div>
+    </div>
+  </section>
+
+  <section class="container-content section" aria-labelledby="home-news">
+    <div class="flex flex-wrap items-end justify-between gap-2">
+      <h2 id="home-news" class="heading-2">ข่าวประชาสัมพันธ์</h2>
+      <a href="#" data-route="news" class="link">ดูข่าวทั้งหมด</a>
+    </div>
+    <div class="mt-6" data-home="news"></div>
+  </section>
+</template>
+
+<script>
+  const HOME_TIMELINE_COUNT = 4;
+
+  /** รายการ Timeline 3–4 รายการรอบวันนี้: เริ่มจากรายการล่าสุดที่ผ่านไปแล้ว 1 รายการ */
+  function pickNearTimeline(items, count) {
+    const today = bangkokDayKey(new Date());
+    const firstActive = items.findIndex(item => bangkokDayKey(item.end_date || item.start_date) >= today);
+    const start = firstActive === -1 ? Math.max(0, items.length - count) : Math.max(0, firstActive - 1);
+    return items.slice(start, start + count);
+  }
+
+  function renderHomeEventBox(event, timeline) {
+    if (!event) {
+      return '<div class="rounded-card bg-navy-700 p-6">' +
+        '<p class="heading-3">ยังไม่มีรอบกิจกรรมที่เปิดอยู่</p>' +
+        '<p class="mt-1 text-navy-100">ติดตามข่าวประชาสัมพันธ์เพื่อรับทราบกำหนดการครั้งถัดไป</p></div>';
+    }
+
+    let status;
+    if (daysUntil(event.open_date) > 0) {
+      status = 'เปิดรับสมัคร ' + formatThaiDate(event.open_date);
+    } else if (isRegistrationOpen(event)) {
+      const days = daysUntil(event.close_date);
+      status = 'ปิดรับสมัคร ' + formatThaiDate(event.close_date) + ' · ' + (days > 0 ? 'เหลืออีก ' + days + ' วัน' : 'วันสุดท้าย');
+    } else {
+      status = 'ปิดรับสมัครแล้วเมื่อ ' + formatThaiDate(event.close_date);
+    }
+
+    const today = bangkokDayKey(new Date());
+    const next = timeline.find(item => bangkokDayKey(item.end_date || item.start_date) >= today);
+    const nextHtml = next
+      ? '<div class="mt-5 border-t border-navy-500 pt-4">' +
+          '<p class="text-label text-gold-400">' + (bangkokDayKey(next.start_date) <= today ? 'กำลังดำเนินการ' : 'กิจกรรมถัดไป') + '</p>' +
+          '<p class="mt-1 font-semibold">' + escapeHtml(next.title) + '</p>' +
+          '<p class="text-sm text-navy-100">' + escapeHtml(formatThaiDate(next.start_date)) + '</p>' +
+        '</div>'
+      : '';
+
+    return '<div class="rounded-card bg-navy-700 p-6">' +
+      '<p class="text-label text-gold-400">รอบกิจกรรมปัจจุบัน</p>' +
+      '<p class="heading-3 mt-1">' + escapeHtml(event.name) + '</p>' +
+      '<p class="mt-3 flex items-start gap-2 text-navy-100">' + icon('calendar-clock', 'mt-0.5') + '<span>' + escapeHtml(status) + '</span></p>' +
+      nextHtml +
+    '</div>';
+  }
+
+  registerPage('home', {
+    render(container, params, isCurrent) {
+      container.appendChild(cloneTemplate('tpl-home'));
+      const slot = name => container.querySelector('[data-home="' + name + '"]');
+
+      slot('hero-actions').innerHTML =
+        (appState.registrationOpen ? '<a href="#" data-route="register" class="btn-primary btn-lg">ลงทะเบียนนำเสนอผลงาน</a>' : '') +
+        '<a href="#" data-route="library" class="btn-secondary btn-lg">' + icon('search') + 'ค้นหางานวิจัย</a>';
+
+      slot('shortcuts').innerHTML = [
+        { icon: 'presentation', title: 'ลงทะเบียนนำเสนอ', description: 'นำเสนอผลงานแบบ Oral หรือ Poster', route: 'register' },
+        { icon: 'file-up', title: 'ส่งงานวิจัย', description: 'สำหรับครูในโรงเรียน (เข้าสู่ระบบ)', route: 'teacher' },
+        { icon: 'download', title: 'ดาวน์โหลดเอกสาร', description: 'แบบฟอร์ม คู่มือ และตัวอย่างรายงาน', route: 'documents' },
+        { icon: 'circle-play', title: 'วิดีโอการสอน', description: 'คลังวิดีโอแยกตามหมวดหมู่', route: 'videos' }
+      ].map(renderShortcutCard).join('');
+
+      const load = () => {
+        slot('event').innerHTML = '<div class="rounded-card bg-navy-700 p-6" aria-busy="true"><span class="sr-only">กำลังโหลด...</span>' +
+          '<div class="skeleton h-4 w-1/3 bg-navy-500"></div><div class="skeleton mt-3 h-6 w-3/4 bg-navy-500"></div><div class="skeleton mt-4 h-4 w-1/2 bg-navy-500"></div></div>';
+        slot('timeline').innerHTML = renderSkeleton('text', 4);
+        slot('news').innerHTML = renderSkeleton('cards', 3);
+
+        return callServer('getHomeData').then(data => {
+          if (!isCurrent()) return;
+          slot('event').innerHTML = renderHomeEventBox(data.event, data.timeline);
+
+          slot('timeline').innerHTML = data.timeline.length
+            ? '<div class="card p-6">' + renderTimeline(pickNearTimeline(data.timeline, HOME_TIMELINE_COUNT)) + '</div>'
+            : renderEmptyState({ icon: 'calendar', title: 'ยังไม่มีกำหนดการ', message: 'กำหนดการจะแสดงเมื่อเปิดรอบกิจกรรมใหม่' });
+
+          slot('news').innerHTML = data.news.length
+            ? '<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">' + data.news.map(renderNewsCard).join('') + '</div>'
+            : renderEmptyState({ icon: 'newspaper', title: 'ยังไม่มีข่าวประชาสัมพันธ์' });
+          refreshIcons();
+        }).catch(err => {
+          if (!isCurrent()) return;
+          slot('event').innerHTML = '';
+          slot('timeline').innerHTML = '';
+          slot('news').innerHTML = '';
+          slot('news').appendChild(createErrorState(err.message, load));
+          refreshIcons();
+        });
+      };
+      return load();
+    }
+  });
+</script>

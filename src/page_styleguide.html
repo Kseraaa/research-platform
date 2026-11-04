@@ -119,6 +119,14 @@
       <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-sg="video-cards"></div>
     </section>
 
+    <section aria-labelledby="sg-public">
+      <h2 id="sg-public" class="heading-2">การ์ดข่าว ทางลัด และช่องค้นหา</h2>
+      <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-sg="news-cards"></div>
+      <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-sg="shortcuts"></div>
+      <div class="mt-4 rounded-card bg-navy-800 px-4 pb-6 pt-1" data-sg="search"></div>
+      <div class="card mt-4 flex flex-col gap-4 p-6 text-body" data-sg="paragraphs"></div>
+    </section>
+
     <section aria-labelledby="sg-nav">
       <h2 id="sg-nav" class="heading-2">แท็บและการแบ่งหน้า</h2>
       <div class="card mt-4 flex flex-col gap-6 p-6">
@@ -274,6 +282,22 @@
         { youtube_id: 'M7lc1UVf-VE', title: 'การเขียนบทคัดย่องานวิจัยในชั้นเรียน', description: 'ตัวอย่างวิดีโอ (กดเล่นเพื่อโหลด iframe)' },
         { youtube_id: 'invalid', title: 'วิดีโอที่ id ไม่ถูกต้อง', description: 'ปุ่มเล่นจะไม่ทำงาน' }
       ].map(renderVideoCard).join('');
+
+      // การ์ดข่าว + ทางลัด + ช่องค้นหา + ย่อหน้า
+      slot('news-cards').innerHTML = [
+        { news_id: 'NEWS-SG1', title: 'เปิดรับลงทะเบียนนำเสนอผลงานวิจัยในชั้นเรียน', summary: 'ลงทะเบียนนำเสนอแบบ Oral หรือ Poster ได้แล้ววันนี้', published_at: day(-2), pinned: true },
+        { news_id: 'NEWS-SG2', title: 'ข่าวที่ชื่อเรื่องยาวมากเพื่อทดสอบการตัดบรรทัดของการ์ดข่าวให้เหลือไม่เกินสองบรรทัดบนทุกขนาดจอ', summary: 'สรุปข่าวสั้นๆ', published_at: day(-6) },
+        { news_id: 'NEWS-SG3', title: 'ข่าวที่ไม่มีสรุป', published_at: day(-30) }
+      ].map(renderNewsCard).join('');
+      slot('shortcuts').innerHTML = [
+        { icon: 'presentation', title: 'ลงทะเบียนนำเสนอ', description: 'Oral หรือ Poster', route: 'register' },
+        { icon: 'file-up', title: 'ส่งงานวิจัย', description: 'สำหรับครูในโรงเรียน', route: 'teacher' },
+        { icon: 'download', title: 'ดาวน์โหลดเอกสาร', description: 'แบบฟอร์ม คู่มือ ตัวอย่าง', route: 'documents' },
+        { icon: 'circle-play', title: 'วิดีโอการสอน', description: 'แยกตามหมวดหมู่', route: 'videos' }
+      ].map(renderShortcutCard).join('');
+      slot('search').innerHTML = renderSearchBox({ id: 'sg-search', label: 'ค้นหาเอกสาร', placeholder: 'ค้นหาจากชื่อเอกสารหรือผู้จัดทำ' });
+      slot('search').querySelector('form').addEventListener('submit', e => { e.preventDefault(); toast('ค้นหา: ' + e.target.q.value, 'info'); });
+      slot('paragraphs').innerHTML = renderParagraphs('ย่อหน้าแรก\nบรรทัดที่สองในย่อหน้าเดียวกัน\n\nย่อหน้าที่สองมีลิงก์ https://www.google.com, และ <b>แท็ก HTML ที่ต้องไม่ทำงาน</b>');
 
       // แท็บ + pagination
       const tabsOutput = slot('tabs-output');

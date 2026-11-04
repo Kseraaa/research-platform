@@ -30,16 +30,16 @@
 
 ## เฟส 1: หน้าสาธารณะ
 
-- [ ] `public.gs`: `getHomeData()` คืนรอบกิจกรรมปัจจุบัน + Timeline + ข่าวล่าสุด 3 ข่าว (cache 10 นาที)
-- [ ] `page_home.html`: โครงตาม DESIGN.md ข้อ 6 (hero + กล่องสรุปรอบกิจกรรม, ทางลัด 4 การ์ด, Timeline ย่อ, ข่าวล่าสุด)
-- [ ] `page_timeline.html`: กำหนดการเต็มของรอบปัจจุบัน
-- [ ] `public.gs`: `getNews(filters)`, `getNewsDetail(newsId)` (เฉพาะ `published`)
-- [ ] `page_news.html`: รายการข่าว + หน้ารายละเอียด (แปลง body เป็นย่อหน้าแบบ escape)
-- [ ] `public.gs`: `getDocuments(filters)` ค้นหา กรองหมวด/ปี แบ่งหน้า
-- [ ] `page_documents.html`: โครงตามดีไซน์ Figma เดิม (ค้นหา + sidebar ตัวกรอง + grid การ์ด + pagination) มือถือใช้ drawer ตัวกรอง
-- [ ] `public.gs`: `getVideos()` คืนหมวดหมู่ + วิดีโอที่ active
-- [ ] `page_videos.html`: แท็บหมวดหมู่ + การ์ดวิดีโอ ฝัง `youtube-nocookie.com` (โหลด iframe เมื่อกดเล่น)
-- [ ] `tests.gs` → `seedSampleData()`: รอบกิจกรรม, Timeline, ข่าว 5 ข่าว, เอกสาร 12 รายการ, วิดีโอ 3 หมวด
+- [x] `public.gs`: `getHomeData()` คืนรอบกิจกรรมปัจจุบัน + Timeline + ข่าวล่าสุด 3 ข่าว (cache 10 นาที)
+- [x] `page_home.html`: โครงตาม DESIGN.md ข้อ 6 (hero + กล่องสรุปรอบกิจกรรม, ทางลัด 4 การ์ด, Timeline ย่อ, ข่าวล่าสุด)
+- [x] `page_timeline.html`: กำหนดการเต็มของรอบปัจจุบัน
+- [x] `public.gs`: `getNews(filters)`, `getNewsDetail(newsId)` (เฉพาะ `published`)
+- [x] `page_news.html`: รายการข่าว + หน้ารายละเอียด (แปลง body เป็นย่อหน้าแบบ escape)
+- [x] `public.gs`: `getDocuments(filters)` ค้นหา กรองหมวด/ปี แบ่งหน้า
+- [x] `page_documents.html`: โครงตามดีไซน์ Figma เดิม (ค้นหา + sidebar ตัวกรอง + grid การ์ด + pagination) มือถือใช้ drawer ตัวกรอง
+- [x] `public.gs`: `getVideos()` คืนหมวดหมู่ + วิดีโอที่ active
+- [x] `page_videos.html`: แท็บหมวดหมู่ + การ์ดวิดีโอ ฝัง `youtube-nocookie.com` (โหลด iframe เมื่อกดเล่น)
+- [x] `tests.gs` → `seedSampleData()`: รอบกิจกรรม, Timeline, ข่าว 5 ข่าว, เอกสาร 12 รายการ, วิดีโอ 3 หมวด
 
 > **Prompt:** ทำเฟส 1 ใน docs/TASKS.md ใช้ component จาก styleguide เท่านั้น ทุกหน้าต้องมีสถานะ loading/empty/error และใช้งานบนมือถือ 375px ได้
 

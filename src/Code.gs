@@ -19,6 +19,7 @@ function doGet(e) {
 
   const clientConfig = getClientConfig_();
   clientConfig.isOwner = isScriptOwner_();
+  clientConfig.currentEvent = getCurrentEventSafe_();
 
   const template = HtmlService.createTemplateFromFile('index');
   // ส่งผ่าน data-attribute ด้วย <?= ?> (escape) ฝั่ง client อ่านด้วย JSON.parse
@@ -72,4 +73,35 @@ function userError_(msg) {
   const e = new Error(msg);
   e.userMessage = msg;
   return e;
+}
+
+// ---------- ตรวจ input จาก client ----------
+
+/** ข้อความ: แปลงเป็น string, ตัดช่องว่างหัวท้าย, ตัดความยาวไม่เกิน max */
+function cleanText_(value, max) {
+  if (value === undefined || value === null) return '';
+  return String(value).trim().slice(0, max || 200);
+}
+
+/** จำนวนเต็มบวก ไม่ใช่ตัวเลขหรือน้อยกว่า 1 ใช้ค่า fallback */
+function toPositiveInt_(value, fallback) {
+  const n = Math.floor(Number(value));
+  return isFinite(n) && n >= 1 ? n : fallback;
+}
+
+/** filters จาก client ต้องเป็น object ธรรมดา */
+function asObject_(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+/** แบ่งหน้า array → { items, page, totalPages, total } */
+function paginate_(items, page, pageSize) {
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const current = Math.min(toPositiveInt_(page, 1), totalPages);
+  return {
+    items: items.slice((current - 1) * pageSize, current * pageSize),
+    page: current,
+    totalPages: totalPages,
+    total: items.length
+  };
 }

@@ -65,7 +65,9 @@ research-platform/
 
 ## 3. Routing (SPA)
 
-- `doGet(e)` คืน `index.html` เสมอ และฝังพารามิเตอร์เริ่มต้น (`e.parameter.page`, `e.parameter.t`) ลงตัวแปร JS
+- `doGet(e)` คืน `index.html` เสมอ และฝังพารามิเตอร์เริ่มต้น (`page`, `t`, `id`) ลงตัวแปร JS
+- ลิงก์ภายในใช้ `<a href="#" data-route="news" data-param-id="NEWS-xxxx">` router แปลง `data-param-*` เป็นพารามิเตอร์ของหน้า
+- `render(container, params, isCurrent)` ของแต่ละหน้า: หลัง `await callServer()` ต้องเช็ก `isCurrent()` ก่อนเขียน DOM (ผู้ใช้อาจเปลี่ยนหน้าไปแล้ว)
 - เปลี่ยนหน้าในฝั่ง client ด้วย `google.script.history.push(state, query)` และฟัง `google.script.history.setChangeHandler`
 - ไม่ reload หน้า session token จึงอยู่ในหน่วยความจำได้ตลอด (เก็บสำรองใน `sessionStorage` แบบห่อ try/catch)
 - route: `home`, `timeline`, `news`, `documents`, `videos`, `register`, `teacher`, `track`, `library`, `login`, `admin`, `privacy`, `styleguide` (ดูเมนูและสิทธิ์ใน `docs/DESIGN.md` ข้อ 5)
@@ -144,7 +146,10 @@ function getMySubmissions(sessionToken) {
 - `withLock_(fn)` ใช้ `LockService.getScriptLock().waitLock(20000)` ครอบทุกการเขียน
 - สร้าง `submission_id` แบบเรียงลำดับภายใต้ lock (นับจากแถวที่ prefix ปีเดียวกัน)
 - `db.gs` มี: `getSheet_(name)`, `readAll_(name)` → array ของ object, `findBy_(name, col, value)`, `insert_(name, obj)`, `updateBy_(name, keyCol, keyValue, patch)`
-- cache ข้อมูลที่อ่านบ่อยและเปลี่ยนน้อย (Timeline, วิดีโอ) ใน `CacheService` 10 นาที และล้าง cache เมื่อแอดมินแก้
+- cache ข้อมูลสาธารณะ (รอบกิจกรรม, Timeline, ข่าว, เอกสาร, วิดีโอ) ใน `CacheService` 10 นาที ผ่าน `cachedRead_()` ใน public.gs
+  - key ทุกตัวมี version นำหน้า แอดมินแก้ข้อมูลแล้วเรียก `clearPublicCache_()` (เปลี่ยน version) ล้างได้ทั้งหมดรวมถึงรายละเอียดข่าวแต่ละข่าว
+- `doGet` ส่งรอบกิจกรรมปัจจุบันไปใน `appConfig.currentEvent` เพื่อให้ทุกหน้ารู้ว่าเปิดรับลงทะเบียนอยู่หรือไม่ (ฝั่ง server ต้องตรวจช่วงเวลาซ้ำตอนรับงานในเฟส 2)
+- `db.gs` มีเพิ่ม: `insertMany_(name, objs)` เขียนหลายแถวครั้งเดียว, `deleteWhere_(name, predicate)` ลบหลายแถว
 
 ## 8. Config (Script Properties)
 

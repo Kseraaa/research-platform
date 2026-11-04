@@ -1,1 +1,48 @@
-<!-- page_videos.html: คลังวิดีโอ (เฟส 1) -->
+<!-- page_videos.html: คลังวิดีโอการสอน (แท็บหมวดหมู่ + grid การ์ดวิดีโอ ฝัง youtube-nocookie เมื่อกดเล่น) -->
+<script>
+  registerPage('videos', {
+    render(container, params, isCurrent) {
+      container.innerHTML = renderPageHero({ title: 'วิดีโอการสอน', description: 'คลังวิดีโอสำหรับครู แยกตามหมวดหมู่' }) +
+        '<section class="container-content section"><div data-videos></div></section>';
+      const body = container.querySelector('[data-videos]');
+
+      const showCategory = (category, panel) => {
+        panel.innerHTML =
+          (category.description ? '<p class="text-meta">' + escapeHtml(category.description) + '</p>' : '') +
+          '<div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">' + category.videos.map(renderVideoCard).join('') + '</div>';
+        refreshIcons();
+      };
+
+      const load = () => {
+        body.innerHTML = renderSkeleton('cards', 6);
+        return callServer('getVideos').then(categories => {
+          if (!isCurrent()) return;
+          if (!categories.length) {
+            body.innerHTML = renderEmptyState({ icon: 'video', title: 'ยังไม่มีวิดีโอ', message: 'วิดีโอการสอนจะแสดงที่นี่เมื่อแอดมินเพิ่มเข้ามา' });
+            refreshIcons();
+            return;
+          }
+          const selected = categories.some(c => c.category_id === params.category) ? params.category : categories[0].category_id;
+          body.innerHTML = '';
+          const panel = document.createElement('div');
+          panel.className = 'mt-6';
+          panel.setAttribute('role', 'tabpanel');
+          body.appendChild(createTabs({
+            label: 'หมวดหมู่วิดีโอ',
+            items: categories.map(c => ({ id: c.category_id, label: c.name })),
+            selected: selected,
+            onChange: id => showCategory(categories.find(c => c.category_id === id), panel)
+          }));
+          body.appendChild(panel);
+          showCategory(categories.find(c => c.category_id === selected), panel);
+        }).catch(err => {
+          if (!isCurrent()) return;
+          body.innerHTML = '';
+          body.appendChild(createErrorState(err.message, load));
+          refreshIcons();
+        });
+      };
+      return load();
+    }
+  });
+</script>

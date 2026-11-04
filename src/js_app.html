@@ -44,6 +44,19 @@
     return text;
   }
 
+  /** จำนวนวันจากวันนี้ถึงวันที่ value ตามเวลาไทย (วันนี้ = 0, เมื่อวาน = -1) */
+  function daysUntil(value, now) {
+    const toDay = v => Math.floor((new Date(v).getTime() + BANGKOK_OFFSET_MS) / 86400000);
+    return toDay(value) - toDay(now || new Date());
+  }
+
+  /** ตอนนี้อยู่ในช่วง open_date – close_date ของรอบกิจกรรมหรือไม่ */
+  function isRegistrationOpen(event, now) {
+    if (!event || !event.open_date || !event.close_date) return false;
+    const t = (now || new Date()).getTime();
+    return t >= new Date(event.open_date).getTime() && t <= new Date(event.close_date).getTime();
+  }
+
   // ---------- state + session ----------
 
   const SESSION_STORAGE_KEY = 'rp_session';
@@ -53,7 +66,7 @@
 
   const appState = {
     session: null,          // { token, email, role, name } หลังล็อกอิน
-    registrationOpen: false, // ตั้งค่าจาก getHomeData ในเฟส 1
+    registrationOpen: false, // คำนวณจาก appConfig.currentEvent ตอนเริ่ม (server ตรวจซ้ำตอนส่งงาน)
     route: null
   };
 
@@ -313,8 +326,20 @@
     }
   }
 
+  /** <a data-route="news" data-param-id="NEWS-..."> → { id: 'NEWS-...' } */
+  function routeParamsFrom(element) {
+    const params = {};
+    Object.keys(element.dataset).forEach(key => {
+      if (key.indexOf('param') === 0 && key.length > 5) {
+        params[key.charAt(5).toLowerCase() + key.slice(6)] = element.dataset[key];
+      }
+    });
+    return params;
+  }
+
   function startApp() {
     appConfig = readBodyJson('config');
+    appState.registrationOpen = isRegistrationOpen(appConfig.currentEvent);
     loadSession();
 
     document.addEventListener('click', event => {
@@ -324,7 +349,7 @@
       const link = event.target.closest('[data-route]');
       if (link) {
         event.preventDefault();
-        navigate(link.dataset.route);
+        navigate(link.dataset.route, routeParamsFrom(link));
         return;
       }
       if (event.target.closest('#menu-toggle')) {

@@ -1,1 +1,35 @@
-<!-- page_timeline.html: กำหนดการเต็ม (เฟส 1) -->
+<!-- page_timeline.html: กำหนดการเต็มของรอบกิจกรรมปัจจุบัน -->
+<script>
+  registerPage('timeline', {
+    render(container, params, isCurrent) {
+      container.innerHTML = renderPageHero({ title: 'กำหนดการ', description: 'กำหนดการของรอบกิจกรรมปัจจุบัน เรียงตามวันที่' }) +
+        '<section class="container-content section"><div class="max-w-3xl" data-timeline></div></section>';
+      const hero = container.querySelector('section p.text-navy-100');
+      const body = container.querySelector('[data-timeline]');
+
+      const load = () => {
+        body.innerHTML = renderSkeleton('text', 6);
+        return callServer('getTimeline').then(data => {
+          if (!isCurrent()) return;
+          if (data.event) hero.textContent = data.event.name;
+          body.innerHTML = data.items.length
+            ? '<div class="card p-6 md:p-8">' + renderTimeline(data.items) + '</div>'
+            : renderEmptyState({
+                icon: 'calendar',
+                title: data.event ? 'ยังไม่มีกำหนดการในรอบนี้' : 'ยังไม่มีรอบกิจกรรมที่เปิดอยู่',
+                message: 'ติดตามข่าวประชาสัมพันธ์เพื่อรับทราบกำหนดการ',
+                actionLabel: 'ดูข่าวประชาสัมพันธ์',
+                actionRoute: 'news'
+              });
+          refreshIcons();
+        }).catch(err => {
+          if (!isCurrent()) return;
+          body.innerHTML = '';
+          body.appendChild(createErrorState(err.message, load));
+          refreshIcons();
+        });
+      };
+      return load();
+    }
+  });
+</script>

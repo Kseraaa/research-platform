@@ -1,1 +1,65 @@
-<!-- page_news.html: รายการข่าว + รายละเอียดข่าว (เฟส 1) -->
+<!-- page_news.html: รายการข่าว (news) + รายละเอียดข่าว (news?id=NEWS-xxxx) -->
+<script>
+  function renderNewsList(container, isCurrent) {
+    container.innerHTML = renderPageHero({ title: 'ข่าวประชาสัมพันธ์', description: 'ข่าวสารและประกาศจากหน่วยส่งเสริมงานวิจัย' }) +
+      '<section class="container-content section"><div data-news-list></div><div class="mt-8" data-news-pager></div></section>';
+    const list = container.querySelector('[data-news-list]');
+    const pager = container.querySelector('[data-news-pager]');
+
+    const load = page => {
+      list.innerHTML = renderSkeleton('cards', 6);
+      pager.innerHTML = '';
+      return callServer('getNews', { page: page }).then(result => {
+        if (!isCurrent()) return;
+        list.innerHTML = result.items.length
+          ? '<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">' + result.items.map(renderNewsCard).join('') + '</div>'
+          : renderEmptyState({ icon: 'newspaper', title: 'ยังไม่มีข่าวประชาสัมพันธ์', message: 'ข่าวใหม่จะแสดงที่นี่', actionLabel: 'กลับหน้าหลัก', actionRoute: 'home' });
+        pager.appendChild(createPagination({
+          page: result.page,
+          totalPages: result.totalPages,
+          onChange: next => { list.scrollIntoView({ block: 'start' }); load(next); }
+        }));
+        refreshIcons();
+      }).catch(err => {
+        if (!isCurrent()) return;
+        list.innerHTML = '';
+        list.appendChild(createErrorState(err.message, () => load(page)));
+        refreshIcons();
+      });
+    };
+    return load(1);
+  }
+
+  function renderNewsDetail(container, newsId, isCurrent) {
+    container.innerHTML = '<article class="container-content section"><div class="mx-auto max-w-3xl" data-news-detail></div></article>';
+    const body = container.querySelector('[data-news-detail]');
+    const backLink = '<a href="#" data-route="news" class="btn-ghost -ml-4">' + icon('arrow-left', 'h-4 w-4') + 'ข่าวทั้งหมด</a>';
+
+    const load = () => {
+      body.innerHTML = backLink + '<div class="mt-4">' + renderSkeleton('text', 8) + '</div>';
+      return callServer('getNewsDetail', newsId).then(news => {
+        if (!isCurrent()) return;
+        body.innerHTML = backLink +
+          '<header class="mt-4">' +
+            '<p class="text-meta"><time datetime="' + escapeHtml(news.published_at) + '">' + escapeHtml(formatThaiDate(news.published_at)) + '</time></p>' +
+            '<h1 class="heading-2 mt-2">' + escapeHtml(news.title) + '</h1>' +
+          '</header>' +
+          (news.cover_url ? '<img src="' + escapeHtml(news.cover_url) + '" alt="" class="mt-6 w-full rounded-card object-cover">' : '') +
+          '<div class="mt-6 flex flex-col gap-4 text-body">' + renderParagraphs(news.body) + '</div>';
+        refreshIcons();
+      }).catch(err => {
+        if (!isCurrent()) return;
+        body.innerHTML = backLink + '<div class="mt-4">' +
+          renderEmptyState({ icon: 'newspaper', title: err.message, actionLabel: 'ดูข่าวทั้งหมด', actionRoute: 'news' }) + '</div>';
+        refreshIcons();
+      });
+    };
+    return load();
+  }
+
+  registerPage('news', {
+    render(container, params, isCurrent) {
+      return params.id ? renderNewsDetail(container, params.id, isCurrent) : renderNewsList(container, isCurrent);
+    }
+  });
+</script>

@@ -96,25 +96,51 @@ function readTable_(name) {
  * @return {Object} record ที่บันทึก
  */
 function insert_(name, obj) {
+  return insertMany_(name, [obj])[0];
+}
+
+/**
+ * เพิ่มหลายแถวในการเขียนครั้งเดียว (กติกาเดียวกับ insert_)
+ * @return {Object[]} records ที่บันทึก
+ */
+function insertMany_(name, objs) {
+  if (!objs.length) return [];
   return withLock_(() => {
     const sheet = getSheet_(name);
     const headers = getHeaders_(sheet);
-    assertColumns_(name, headers, Object.keys(obj));
-
-    const record = Object.assign({}, obj);
-    const now = nowIso_();
-    if (headers.indexOf('created_at') !== -1 && !record.created_at) record.created_at = now;
-    if (headers.indexOf('updated_at') !== -1 && !record.updated_at) record.updated_at = now;
-
     const types = getColumnTypes_(name);
-    const row = headers.map(h => toCell_(record[h], types[h]));
+    const now = nowIso_();
+
+    const records = objs.map(obj => {
+      assertColumns_(name, headers, Object.keys(obj));
+      const record = Object.assign({}, obj);
+      if (headers.indexOf('created_at') !== -1 && !record.created_at) record.created_at = now;
+      if (headers.indexOf('updated_at') !== -1 && !record.updated_at) record.updated_at = now;
+      return record;
+    });
+    const rows = records.map(record => headers.map(h => toCell_(record[h], types[h])));
+
     const nextRow = sheet.getLastRow() + 1;
-    if (nextRow > sheet.getMaxRows()) {
+    const lastNeeded = nextRow + rows.length - 1;
+    if (lastNeeded > sheet.getMaxRows()) {
       // แถวที่แทรกจะได้ format (เช่น plain text) จากแถวด้านบน
-      sheet.insertRowsAfter(sheet.getMaxRows(), 200);
+      sheet.insertRowsAfter(sheet.getMaxRows(), lastNeeded - sheet.getMaxRows() + 200);
     }
-    sheet.getRange(nextRow, 1, 1, headers.length).setValues([row]);
-    return record;
+    sheet.getRange(nextRow, 1, rows.length, headers.length).setValues(rows);
+    return records;
+  });
+}
+
+/**
+ * ลบทุกแถวที่ predicate(record) เป็นจริง (ลบจากล่างขึ้นบนเพื่อไม่ให้เลขแถวเลื่อน)
+ * @return {number} จำนวนแถวที่ลบ
+ */
+function deleteWhere_(name, predicate) {
+  return withLock_(() => {
+    const table = readTable_(name);
+    const targets = table.rows.filter(item => predicate(item.record)).map(item => item.rowNumber);
+    targets.sort((a, b) => b - a).forEach(rowNumber => table.sheet.deleteRow(rowNumber));
+    return targets.length;
   });
 }
 
