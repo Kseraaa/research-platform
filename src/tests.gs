@@ -334,6 +334,82 @@ function runAuthTests() {
   return t.finish();
 }
 
+// ---------- test หน้าแอดมิน ----------
+
+/**
+ * รันใน editor: transition ที่ผู้ตรวจเลือกได้, การตรวจฟิลด์ของ CRUD, วันที่, ลิงก์ YouTube, ไฟล์สาธารณะ (ไม่แตะ Drive/Sheets)
+ */
+function runAdminTests() {
+  const t = createTestRunner_();
+  const transitions = (type, status) => allowedAdminTransitions_({ type: type, status: status }).join(',');
+
+  t.test('งานภายนอก submitted → under_review เท่านั้น', () => {
+    if (transitions('oral', 'submitted') !== 'under_review') throw new Error(transitions('oral', 'submitted'));
+  });
+  t.test('งานครู submitted → under_review หรือ recorded', () => {
+    if (transitions('teacher', 'submitted') !== 'under_review,recorded') throw new Error(transitions('teacher', 'submitted'));
+  });
+  t.test('ผู้ตรวจตั้ง resubmitted เองไม่ได้ และ accepted แล้วเปลี่ยนต่อไม่ได้', () => {
+    if (transitions('poster', 'revision_requested') !== '') throw new Error(transitions('poster', 'revision_requested'));
+    if (transitions('poster', 'accepted') !== '') throw new Error('accepted ยังเปลี่ยนได้');
+  });
+
+  t.test('วันที่: date / datetime / ISO เดิม → เวลาไทย', () => {
+    const cases = [
+      [toBangkokIso_('2026-11-15', 'date'), '2026-11-15T00:00:00+07:00'],
+      [toBangkokIso_('2026-11-15T09:30', 'datetime'), '2026-11-15T09:30:00+07:00'],
+      [toBangkokIso_('2026-11-15T09:30:00+07:00', 'datetime'), '2026-11-15T09:30:00+07:00'],
+      [toBangkokIso_('15/11/2026', 'date'), ''],
+      [toBangkokIso_('2026-13-01', 'date'), '']
+    ];
+    cases.forEach(c => { if (c[0] !== c[1]) throw new Error(c[0] + ' ≠ ' + c[1]); });
+  });
+  t.test('ลิงก์ YouTube หลายแบบ → รหัสวิดีโอ', () => {
+    ['https://www.youtube.com/watch?v=M7lc1UVf-VE', 'https://youtu.be/M7lc1UVf-VE?t=3', 'https://www.youtube.com/watch?list=x&v=M7lc1UVf-VE',
+      'https://www.youtube.com/shorts/M7lc1UVf-VE', 'https://www.youtube-nocookie.com/embed/M7lc1UVf-VE', 'M7lc1UVf-VE'].forEach(u => {
+      if (parseYoutubeId_(u) !== 'M7lc1UVf-VE') throw new Error(u);
+    });
+    if (parseYoutubeId_('https://vimeo.com/123') !== '') throw new Error('vimeo ไม่ควรผ่าน');
+  });
+
+  const timeline = adminTables_().TIMELINE;
+  const events = { event_id: [{ value: 'EVT-2026', label: 'งาน 2026' }] };
+  t.test('Timeline ถูกต้อง: แปลงวันที่และตัดฟิลด์แปลกปลอม', () => {
+    const clean = validateAdminRecord_(timeline, { event_id: 'EVT-2026', title: ' ปฐมนิเทศ ', start_date: '2026-11-20', sort_order: '2', hacker: 'x' }, true, events);
+    if (clean.start_date !== '2026-11-20T00:00:00+07:00' || clean.title !== 'ปฐมนิเทศ' || clean.sort_order !== 2 || 'hacker' in clean) throw new Error(JSON.stringify(clean));
+  });
+  t.test('Timeline: ขาดหัวข้อ / รอบกิจกรรมไม่มีจริง', () => t.expectError(() =>
+    validateAdminRecord_(timeline, { event_id: 'EVT-FAKE', start_date: '2026-11-20' }, true, events), /หัวข้อ: กรุณากรอก.*รอบกิจกรรม: กรุณาเลือก|รอบกิจกรรม: กรุณาเลือก.*หัวข้อ: กรุณากรอก/));
+  t.test('รอบกิจกรรม: ตอนแก้ไขข้ามรหัสรอบ (createOnly)', () => {
+    const clean = validateAdminRecord_(adminTables_().EVENTS, { event_id: 'EVT-HACK', name: 'งาน', year: 2569, open_date: '2026-11-01T08:00', close_date: '2026-11-30T17:00' }, false, {});
+    if ('event_id' in clean) throw new Error('แก้รหัสรอบได้');
+  });
+  t.test('ข่าว: สรุปเกิน 200 ตัวอักษร', () => t.expectError(() =>
+    validateAdminRecord_(adminTables_().NEWS, { title: 'ข่าว', summary: new Array(202).join('ก'), body: 'เนื้อหา', status: 'draft' }, true,
+      { status: [{ value: 'draft', label: 'ร่าง' }] }), /ยาวเกิน 200/));
+  t.test('ผู้ดูแล: อีเมลผิดรูปแบบ', () => t.expectError(() =>
+    validateAdminRecord_(adminTables_().ADMINS, { email: 'not-email', full_name: 'ก', role: 'admin', active: true }, true,
+      { role: [{ value: 'admin', label: 'แอดมิน' }] }), /อีเมล/));
+  t.test('ลิงก์แบบฟอร์มต้องเป็น http(s)', () => t.expectError(() =>
+    validateAdminRecord_(adminTables_().EVENTS, { event_id: 'EVT-1', name: 'ก', year: 2569, open_date: '2026-11-01', close_date: '2026-11-02', oral_template_url: 'javascript:alert(1)' }, true, {}), /https/));
+
+  const docSpec = adminTables_().DOCUMENTS.file;
+  t.test('ไฟล์เอกสาร PPTX ถูกต้อง', () => {
+    const r = validatePublicUpload_(docSpec, { name: 'slide.pptx', base64: Utilities.base64Encode([0x50, 0x4B, 0x03, 0x04, 0x00]) });
+    if (r.ext !== 'pptx') throw new Error(r.ext);
+  });
+  t.test('ไฟล์เอกสาร: .exe ไม่รับ / PDF ปลอม', () => {
+    t.expectError(() => validatePublicUpload_(docSpec, { name: 'virus.exe', base64: 'AAAA' }), /ชนิดไฟล์/);
+    t.expectError(() => validatePublicUpload_(docSpec, { name: 'fake.pdf', base64: Utilities.base64Encode('MZ not a pdf') }), /ไม่ตรงกับนามสกุล/);
+  });
+  t.test('รูปปกข่าว PNG ถูกต้อง / ใหญ่เกิน 5 MB', () => {
+    const coverSpec = adminTables_().NEWS.file;
+    validatePublicUpload_(coverSpec, { name: 'cover.png', base64: Utilities.base64Encode([0x89, 0x50, 0x4E, 0x47, 0x0D]) });
+    t.expectError(() => validatePublicUpload_(coverSpec, { name: 'big.jpg', base64: new Array(7 * 1024 * 1024 + 1).join('A') }), /ใหญ่เกิน 5 MB/);
+  });
+  return t.finish();
+}
+
 // ---------- test อีเมล ----------
 
 /**

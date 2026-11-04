@@ -1,1 +1,457 @@
-<!-- page_admin.html: หน้าแอดมิน (เฟส 5) -->
+<!-- page_admin.html: หน้าจัดการระบบ (?page=admin&section=...)
+     reviewer: ภาพรวม + งานที่ส่ง / admin: ทุกเมนู (ตาราง + ฟอร์มสร้างจากนิยามตารางใน admin.gs) -->
+<script>
+  const ADMIN_SECTIONS = [
+    { id: 'overview', label: 'ภาพรวม', icon: 'layout-dashboard', roles: ['reviewer', 'admin'] },
+    { id: 'submissions', label: 'งานที่ส่ง', icon: 'inbox', roles: ['reviewer', 'admin'] },
+    { id: 'timeline', label: 'Timeline', icon: 'calendar', roles: ['admin'], tables: ['TIMELINE'] },
+    { id: 'news', label: 'ข่าว', icon: 'newspaper', roles: ['admin'], tables: ['NEWS'] },
+    { id: 'documents', label: 'เอกสาร', icon: 'folder-open', roles: ['admin'], tables: ['DOCUMENTS', 'DOC_CATEGORIES'] },
+    { id: 'videos', label: 'วิดีโอ', icon: 'video', roles: ['admin'], tables: ['VIDEOS', 'VIDEO_CATEGORIES'] },
+    { id: 'events', label: 'รอบกิจกรรม', icon: 'calendar-range', roles: ['admin'], tables: ['EVENTS'] },
+    { id: 'admins', label: 'ผู้ดูแล', icon: 'users', roles: ['admin'], tables: ['ADMINS'] }
+  ];
+
+  registerPage('admin', {
+    render(container, params, isCurrent) {
+      const role = appState.session.role;
+      const sections = ADMIN_SECTIONS.filter(s => s.roles.indexOf(role) !== -1);
+      const current = sections.find(s => s.id === params.section) || sections[0];
+      const typeLabel = type => (appConfig.typeLabels || {})[type] || type;
+      const statusLabel = status => (appConfig.statusLabels || {})[status] || status;
+
+      container.innerHTML =
+        '<section class="container-content py-8 md:py-12">' +
+          '<div class="flex flex-wrap items-end justify-between gap-3">' +
+            '<div><p class="label-gold">จัดการระบบ</p><h1 class="heading-2">' + escapeHtml(current.label) + '</h1></div>' +
+            '<div class="w-full lg:hidden"><label for="admin-menu" class="sr-only">เมนูจัดการระบบ</label>' +
+              '<select id="admin-menu" class="field-input">' + sections.map(s =>
+                '<option value="' + s.id + '"' + (s.id === current.id ? ' selected' : '') + '>' + escapeHtml(s.label) + '</option>').join('') +
+              '</select></div>' +
+          '</div>' +
+          '<div class="mt-6 lg:grid lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-8">' +
+            '<nav aria-label="เมนูจัดการระบบ" class="hidden lg:block"><ul class="sticky top-24 flex flex-col gap-1">' + sections.map(s =>
+              '<li><a href="#" data-route="admin" data-param-section="' + s.id + '" class="btn-ghost w-full justify-start' +
+                (s.id === current.id ? ' bg-navy-50 text-navy-700' : '') + '"' + (s.id === current.id ? ' aria-current="page"' : '') + '>' +
+                icon(s.icon, 'h-4 w-4') + escapeHtml(s.label) + '</a></li>').join('') +
+            '</ul></nav>' +
+            '<div class="min-w-0" data-admin="content"></div>' +
+          '</div>' +
+        '</section>';
+      container.querySelector('#admin-menu').addEventListener('change', e => navigate('admin', { section: e.target.value }));
+      const content = container.querySelector('[data-admin="content"]');
+
+      const showError = (target, err, retry) => {
+        if (!isCurrent() || err.code === 'SESSION_EXPIRED') return;
+        target.innerHTML = '';
+        target.appendChild(createErrorState(err.message, retry));
+        refreshIcons();
+      };
+
+      // ---------- ภาพรวม ----------
+
+      function renderOverview() {
+        content.innerHTML = renderSkeleton('cards', 3);
+        return callServer('adminListSubmissions', sessionToken(), {}).then(result => {
+          if (!isCurrent()) return;
+          const s = result.summary;
+          const waiting = (s.byStatus.submitted || 0) + (s.byStatus.resubmitted || 0);
+          const stat = (label, value, extra) =>
+            '<div class="card p-5"><p class="text-meta">' + escapeHtml(label) + '</p>' +
+              '<p class="font-heading text-3xl font-bold text-navy-700">' + value + '</p>' + (extra || '') + '</div>';
+          content.innerHTML =
+            '<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">' +
+              stat('งานทั้งหมด', s.total) +
+              stat('รอพิจารณา', waiting, waiting ? '<a href="#" data-route="admin" data-param-section="submissions" class="link text-sm">ไปที่งานที่ส่ง</a>' : '') +
+              ['oral', 'poster', 'teacher'].map(t => stat(typeLabel(t), s.byType[t] || 0)).join('') +
+            '</div>' +
+            '<div class="card mt-6 p-5"><h2 class="heading-3">จำนวนตามสถานะ</h2><ul class="mt-4 flex flex-wrap gap-3">' +
+              Object.keys(appConfig.statusLabels || {}).filter(st => st !== 'draft').map(st =>
+                '<li class="flex items-center gap-2 rounded-md border border-line px-3 py-2">' + renderStatusBadge(st) +
+                '<span class="font-semibold">' + (s.byStatus[st] || 0) + '</span></li>').join('') +
+            '</ul></div>' +
+            (result.sheet_url
+              ? '<div class="card mt-6 flex flex-wrap items-center justify-between gap-3 p-5">' +
+                  '<div><h2 class="heading-3">รายชื่อผู้ลงทะเบียน</h2><p class="text-meta">เปิดแท็บ SUBMISSIONS ใน Google Sheets แล้วใช้ตัวกรองหรือดาวน์โหลดเป็น Excel ได้</p></div>' +
+                  '<a class="btn-secondary" href="' + escapeHtml(result.sheet_url) + '" target="_blank" rel="noopener">' + icon('sheet', 'h-4 w-4') + 'เปิดใน Google Sheets</a>' +
+                '</div>'
+              : '');
+          refreshIcons();
+        }).catch(err => showError(content, err, renderOverview));
+      }
+
+      // ---------- งานที่ส่ง ----------
+
+      function renderSubmissions() {
+        const filters = { event_id: '', type: '', status: '', q: '', page: 1 };
+        let requestSeq = 0;
+        content.innerHTML =
+          '<form class="card grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1.5fr_auto] xl:items-end" data-sub="filters">' +
+            '<div class="field"><label class="field-label" for="sub-event">รอบกิจกรรม</label><select id="sub-event" name="event_id" class="field-input"><option value="">ทุกรอบ</option></select></div>' +
+            '<div class="field"><label class="field-label" for="sub-type">ประเภท</label><select id="sub-type" name="type" class="field-input"><option value="">ทุกประเภท</option>' +
+              ['oral', 'poster', 'teacher'].map(t => '<option value="' + t + '">' + escapeHtml(typeLabel(t)) + '</option>').join('') + '</select></div>' +
+            '<div class="field"><label class="field-label" for="sub-status">สถานะ</label><select id="sub-status" name="status" class="field-input"><option value="">ทุกสถานะ</option>' +
+              Object.keys(appConfig.statusLabels || {}).filter(st => st !== 'draft').map(st => '<option value="' + st + '">' + escapeHtml(statusLabel(st)) + '</option>').join('') + '</select></div>' +
+            '<div class="field"><label class="field-label" for="sub-q">ค้นหา</label><input id="sub-q" name="q" type="search" class="field-input" placeholder="รหัสงาน ชื่อเรื่อง ชื่อผู้ส่ง" maxlength="100"></div>' +
+            '<button type="submit" class="btn-primary">ค้นหา</button>' +
+          '</form>' +
+          '<div class="mt-6 grid gap-6" data-sub="layout">' +
+            '<div class="min-w-0" data-sub="list-wrap"><p class="text-meta" data-sub="summary" aria-live="polite"></p><div class="mt-3" data-sub="list"></div><div class="mt-6" data-sub="pager"></div></div>' +
+            '<div class="min-w-0" data-sub="detail" hidden></div>' +
+          '</div>';
+        const $ = name => content.querySelector('[data-sub="' + name + '"]');
+        const form = $('filters');
+
+        const load = () => {
+          const seq = ++requestSeq;
+          $('list').innerHTML = renderSkeleton('table', 5);
+          $('pager').innerHTML = '';
+          return callServer('adminListSubmissions', sessionToken(), filters).then(result => {
+            if (!isCurrent() || seq !== requestSeq) return;
+            const eventSelect = form.querySelector('#sub-event');
+            if (eventSelect.options.length === 1) {
+              eventSelect.insertAdjacentHTML('beforeend', result.events.map(e =>
+                '<option value="' + escapeHtml(e.event_id) + '">' + escapeHtml(e.name) + (e.is_current ? ' (ปัจจุบัน)' : '') + '</option>').join(''));
+            }
+            $('summary').textContent = 'พบ ' + result.total + ' งาน';
+            lastItems = result.items;
+            renderList();
+            $('pager').appendChild(createPagination({ page: result.page, totalPages: result.totalPages, onChange: p => { filters.page = p; load(); } }));
+          }).catch(err => showError($('list'), err, load));
+        };
+
+        let lastItems = [];
+        let openId = '';
+
+        /** แผงรายละเอียดเปิดอยู่: ตารางเหลือ 3 คอลัมน์ (พื้นที่ข้างแผงแคบ) และไฮไลต์แถวที่เปิด */
+        function renderList() {
+          const compact = Boolean(openId);
+          const columns = [
+            { key: 'submission_id', label: 'รหัสงาน', html: r => '<span class="whitespace-nowrap font-medium">' + escapeHtml(r.submission_id) + '</span>' },
+            { key: 'title', label: 'ชื่อเรื่อง', html: r => '<span class="[overflow-wrap:anywhere]">' + escapeHtml(r.title) + '</span>' +
+                '<p class="text-meta">' + escapeHtml(r.presenter_name) + (!compact && r.organization ? ' · ' + escapeHtml(r.organization) : '') + '</p>' },
+            { key: 'type', label: 'ประเภท', html: r => escapeHtml(typeLabel(r.type)) },
+            { key: 'submitted_at', label: 'วันที่ส่ง', html: r => '<span class="whitespace-nowrap">' + escapeHtml(formatThaiDate(r.submitted_at)) + '</span>' },
+            { key: 'status', label: 'สถานะ', html: r => renderStatusBadge(r.status) },
+            { key: 'open', label: 'จัดการ', html: r => '<button type="button" class="' + (r.submission_id === openId ? 'btn-primary' : 'btn-secondary') + '" data-detail="' +
+                escapeHtml(r.submission_id) + '"' + (r.submission_id === openId ? ' aria-current="true"' : '') + '>ดู<span class="sr-only"> ' + escapeHtml(r.submission_id) + '</span></button>' }
+          ].filter(c => !compact || ['type', 'submitted_at'].indexOf(c.key) === -1);
+          $('list').innerHTML = lastItems.length
+            ? renderDataTable({ caption: 'งานที่ส่ง', columns: columns, rows: lastItems })
+            : renderEmptyState({ icon: 'inbox', title: 'ไม่พบงาน', message: 'ลองเปลี่ยนตัวกรอง' });
+          refreshIcons();
+        }
+
+        form.addEventListener('submit', e => { e.preventDefault(); readFilters(); load(); });
+        form.addEventListener('change', e => { if (e.target.tagName === 'SELECT') { readFilters(); load(); } });
+        function readFilters() {
+          ['event_id', 'type', 'status', 'q'].forEach(k => { filters[k] = form.elements[k].value.trim(); });
+          filters.page = 1;
+        }
+
+        $('list').addEventListener('click', e => {
+          const btn = e.target.closest('[data-detail]');
+          if (btn) openDetail(btn.dataset.detail);
+        });
+
+        function setDetailOpen(open, id) {
+          openId = open ? id : '';
+          renderList();
+          $('detail').hidden = !open;
+          $('layout').classList.toggle('xl:grid-cols-[minmax(0,1fr)_440px]', open);
+          // จอเล็กกว่า xl: แสดงรายละเอียดแทนรายการ (เหมือนเปิดหน้าใหม่)
+          $('list-wrap').classList.toggle('hidden', open);
+          $('list-wrap').classList.toggle('xl:block', open);
+          form.classList.toggle('hidden', open);
+          form.classList.toggle('xl:grid', open);
+        }
+
+        function openDetail(id) {
+          setDetailOpen(true, id);
+          const detail = $('detail');
+          detail.innerHTML = '<div class="card p-5">' + renderSkeleton('text', 8) + '</div>';
+          detail.scrollIntoView({ block: 'start' });
+          return callServer('adminGetSubmission', sessionToken(), id)
+            .then(data => { if (isCurrent()) renderDetail(data); })
+            .catch(err => showError(detail, err, () => openDetail(id)));
+        }
+
+        function renderDetail(d) {
+          const detail = $('detail');
+          const row = (label, value) => value === '' || value === null || value === undefined ? '' :
+            '<div class="py-2"><dt class="text-sm font-medium text-ink-muted">' + escapeHtml(label) + '</dt><dd class="[overflow-wrap:anywhere]">' + value + '</dd></div>';
+          const p = d.presenter;
+          detail.innerHTML =
+            '<article class="card flex flex-col gap-5 p-5 xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto">' +
+              '<div class="flex items-start justify-between gap-2">' +
+                '<div><p class="font-heading text-xl font-bold text-navy-700">' + escapeHtml(d.submission_id) + '</p>' +
+                  '<h2 class="heading-3 [overflow-wrap:anywhere]">' + escapeHtml(d.title) + '</h2></div>' +
+                '<button type="button" class="btn-ghost btn-icon -m-2 shrink-0" data-sub-close aria-label="ปิดรายละเอียด">' + icon('x') + '</button>' +
+              '</div>' +
+              '<div class="flex flex-wrap items-center gap-2">' + renderStatusBadge(d.status) + '<span class="text-meta">' + escapeHtml(typeLabel(d.type)) + '</span></div>' +
+              (d.reviewer_note ? renderAlert(d.status === 'revision_requested' ? 'warning' : 'info', d.reviewer_note, 'หมายเหตุล่าสุดถึงผู้ส่ง') : '') +
+              '<dl class="divide-y divide-line">' +
+                row('ผู้ส่ง', escapeHtml(p.full_name) + (p.organization ? '<br><span class="text-meta">' + escapeHtml(p.organization) + '</span>' : '')) +
+                row('อีเมล', p.email ? '<a class="link" href="mailto:' + escapeHtml(p.email) + '">' + escapeHtml(p.email) + '</a>' : '') +
+                row('เบอร์โทร', p.phone ? escapeHtml(p.phone) : '') +
+                row('ผู้วิจัย', escapeHtml((d.authors || []).join(', '))) +
+                row('สาขา', escapeHtml(d.subject_area)) +
+                row('รอบกิจกรรม', escapeHtml(d.event_name)) +
+                row('ปีการศึกษา', escapeHtml(d.academic_year)) +
+                row('ส่งเมื่อ', escapeHtml(formatThaiDate(d.submitted_at, { withTime: true }))) +
+                row('อนุญาตเผยแพร่', d.allow_publish ? 'อนุญาต' : 'ไม่อนุญาต') +
+                row('บทคัดย่อ', d.abstract_short ? '<span class="whitespace-pre-line">' + escapeHtml(d.abstract_short) + '</span>' : '') +
+              '</dl>' +
+              '<section><h3 class="font-semibold">ไฟล์</h3><ul class="mt-2 divide-y divide-line">' + d.files.map(f =>
+                '<li class="flex items-center gap-3 py-2">' +
+                  '<div class="min-w-0 flex-1"><p class="text-sm font-medium [overflow-wrap:anywhere]">' + escapeHtml(f.file_name) + '</p>' +
+                  '<p class="text-meta">ฉบับที่ ' + escapeHtml(f.version) + (f.is_current ? ' · <span class="text-success-fg">ล่าสุด</span>' : '') + ' · ' +
+                    escapeHtml(formatFileSize(f.size_kb * 1024)) + ' · ' + escapeHtml(formatThaiDate(f.uploaded_at)) + '</p></div>' +
+                  '<button type="button" class="btn-ghost btn-icon shrink-0" data-file-id="' + escapeHtml(f.file_id) + '" aria-label="ดาวน์โหลด ' + escapeHtml(f.file_name) + '">' + icon('download') + '</button>' +
+                '</li>').join('') + '</ul></section>' +
+              (d.allowed_statuses.length
+                ? '<form class="rounded-card border border-line p-4" data-sub="status-form" novalidate>' +
+                    '<fieldset class="field"><legend class="field-label mb-2">เปลี่ยนสถานะเป็น</legend><div class="flex flex-col gap-1">' +
+                      d.allowed_statuses.map(st =>
+                        '<label class="flex min-h-[44px] cursor-pointer items-center gap-3"><input type="radio" name="to_status" value="' + st + '" class="h-5 w-5 accent-navy-500">' +
+                        renderStatusBadge(st) + '</label>').join('') +
+                    '</div></fieldset>' +
+                    '<div class="mt-3">' + renderField({ id: 'sub-note', name: 'note', label: 'หมายเหตุถึงผู้ส่ง', multiline: true, maxlength: 2000,
+                      help: 'จะแสดงในอีเมลและหน้าติดตามสถานะ บังคับเมื่อขอให้แก้ไข' }) + '</div>' +
+                    '<div class="mt-3" data-sub="status-alert"></div>' +
+                    '<button type="submit" class="btn-primary mt-2 w-full">บันทึกและแจ้งผู้ส่งทางอีเมล</button>' +
+                  '</form>'
+                : '<p class="text-meta">สถานะนี้เปลี่ยนต่อไม่ได้แล้ว' + (d.status === 'revision_requested' ? ' (รอผู้ส่งส่งฉบับแก้ไข)' : '') + '</p>') +
+              '<section><h3 class="font-semibold">ประวัติสถานะ</h3><ol class="mt-2 flex flex-col gap-2">' + d.history.slice().reverse().map(h =>
+                '<li class="rounded-md bg-surface-alt p-3 text-sm">' +
+                  '<div class="flex flex-wrap items-center gap-2">' + renderStatusBadge(h.to_status) +
+                    '<span class="text-ink-muted">' + escapeHtml(formatThaiDate(h.changed_at, { withTime: true })) + '</span></div>' +
+                  '<p class="mt-1 text-ink-muted">โดย ' + escapeHtml(h.changed_by === 'system' ? 'ระบบ' : h.changed_by === 'presenter' ? 'ผู้ส่ง' : h.changed_by) + '</p>' +
+                  (h.note ? '<p class="mt-1">' + escapeHtml(h.note) + '</p>' : '') +
+                '</li>').join('') + '</ol></section>' +
+            '</article>';
+
+          detail.querySelector('[data-sub-close]').addEventListener('click', () => { setDetailOpen(false); $('list-wrap').scrollIntoView({ block: 'start' }); });
+          // ใช้ onclick (ไม่ใช่ addEventListener) เพราะ renderDetail ถูกเรียกซ้ำหลังเปลี่ยนสถานะ
+          detail.onclick = e => {
+            const btn = e.target.closest('[data-file-id]');
+            if (btn) downloadSubmissionFile(sessionToken(), btn.dataset.fileId, btn);
+          };
+          const statusForm = detail.querySelector('[data-sub="status-form"]');
+          if (statusForm) statusForm.addEventListener('submit', e => {
+            e.preventDefault();
+            const alertBox = detail.querySelector('[data-sub="status-alert"]');
+            const chosen = statusForm.querySelector('input[name="to_status"]:checked');
+            const note = statusForm.elements.note.value.trim();
+            const fail = message => { alertBox.innerHTML = renderAlert('danger', message); refreshIcons(); };
+            if (!chosen) return fail('กรุณาเลือกสถานะ');
+            if (chosen.value === 'revision_requested' && !note) return fail('กรุณาใส่หมายเหตุว่าต้องแก้ไขอะไร');
+            const button = statusForm.querySelector('button[type=submit]');
+            setButtonLoading(button, true, 'กำลังบันทึก...');
+            callServer('adminChangeStatus', sessionToken(), d.submission_id, chosen.value, note).then(updated => {
+              if (!isCurrent()) return;
+              toast('เปลี่ยนสถานะเป็น "' + statusLabel(updated.status) + '" และส่งอีเมลแจ้งผู้ส่งแล้ว', 'success');
+              renderDetail(updated);
+              load();
+            }).catch(err => {
+              if (!isCurrent() || err.code === 'SESSION_EXPIRED') return;
+              setButtonLoading(button, false);
+              fail(err.message);
+            });
+          });
+          refreshIcons();
+        }
+
+        return load();
+      }
+
+      // ---------- ตาราง CRUD กลาง ----------
+
+      function renderTables(tables) {
+        content.innerHTML = tables.map(t => '<section class="mb-10" data-table="' + t + '">' + renderSkeleton('table', 4) + '</section>').join('');
+        return Promise.all(tables.map(t => loadTable(t, content.querySelector('[data-table="' + t + '"]'))));
+      }
+
+      function loadTable(table, box) {
+        box.innerHTML = renderSkeleton('table', 4);
+        return callServer('adminListRecords', sessionToken(), table).then(data => {
+          if (!isCurrent()) return;
+          renderTable(data, box);
+        }).catch(err => showError(box, err, () => loadTable(table, box)));
+      }
+
+      function fieldOf(spec, name) {
+        return spec.fields.find(f => f.name === name) || spec.extraColumns.find(f => f.name === name) || { name: name, label: name };
+      }
+
+      function formatCell(field, value, options) {
+        if (value === '' || value === null || value === undefined) return '<span class="text-ink-muted">-</span>';
+        switch (field.type) {
+          case 'date': return '<span class="whitespace-nowrap">' + escapeHtml(formatThaiDate(value)) + '</span>';
+          case 'datetime': return '<span class="whitespace-nowrap">' + escapeHtml(formatThaiDate(value, { withTime: true })) + '</span>';
+          case 'boolean': return value ? '<span class="badge-success">ใช่</span>' : '<span class="badge-neutral">ไม่</span>';
+          case 'select': {
+            const option = (options[field.name] || []).find(o => o.value === value);
+            return escapeHtml(option ? option.label : value);
+          }
+          default: return '<span class="[overflow-wrap:anywhere]">' + escapeHtml(value) + '</span>';
+        }
+      }
+
+      function renderTable(data, box) {
+        const spec = data.spec;
+        box.innerHTML =
+          '<div class="flex flex-wrap items-center justify-between gap-3">' +
+            '<h2 class="heading-3">' + escapeHtml(spec.label) + ' <span class="text-meta">(' + data.records.length + ')</span></h2>' +
+            '<button type="button" class="btn-primary" data-crud="add">' + icon('plus', 'h-4 w-4') + 'เพิ่ม' + escapeHtml(spec.label) + '</button>' +
+          '</div>' +
+          '<div class="mt-4">' + (data.records.length
+            ? renderDataTable({
+                caption: spec.label,
+                columns: spec.columns.map(name => {
+                  const field = fieldOf(spec, name);
+                  return { key: name, label: field.label, html: r => formatCell(field, r[name], data.options) };
+                }).concat([{ key: '_actions', label: 'จัดการ', html: r =>
+                  '<div class="flex gap-1">' +
+                    '<button type="button" class="btn-ghost btn-icon" data-crud="edit" data-key="' + escapeHtml(r[spec.key]) + '" aria-label="แก้ไข ' + escapeHtml(r[spec.key]) + '">' + icon('pencil', 'h-4 w-4') + '</button>' +
+                    '<button type="button" class="btn-ghost btn-icon text-danger-fg" data-crud="delete" data-key="' + escapeHtml(r[spec.key]) + '" aria-label="ลบ ' + escapeHtml(r[spec.key]) + '">' + icon('trash-2', 'h-4 w-4') + '</button>' +
+                  '</div>' }]),
+                rows: data.records
+              })
+            : renderEmptyState({ icon: 'inbox', title: 'ยังไม่มี' + spec.label, message: 'กดปุ่ม "เพิ่ม' + spec.label + '" เพื่อเริ่ม' })) +
+          '</div>';
+        box.querySelector('[data-crud="add"]').addEventListener('click', () => openForm(data, null, box));
+        box.querySelectorAll('[data-crud="edit"]').forEach(btn => btn.addEventListener('click', () =>
+          openForm(data, data.records.find(r => String(r[spec.key]) === btn.dataset.key), box)));
+        box.querySelectorAll('[data-crud="delete"]').forEach(btn => btn.addEventListener('click', () => {
+          const record = data.records.find(r => String(r[spec.key]) === btn.dataset.key);
+          const title = record.title || record.name || record.email || record[spec.key];
+          confirmDialog({ title: 'ลบ' + spec.label + 'นี้?', message: '"' + title + '" จะถูกลบถาวร', confirmLabel: 'ลบ', danger: true }).then(ok => {
+            if (!ok) return;
+            callServer('adminDeleteRecord', sessionToken(), data.table, record[spec.key]).then(() => {
+              toast('ลบแล้ว', 'success');
+              loadTable(data.table, box);
+            }).catch(err => { if (err.code !== 'SESSION_EXPIRED') toast(err.message, 'danger'); });
+          });
+        }));
+        refreshIcons();
+      }
+
+      /** ค่าในฟอร์ม ← ค่าที่เก็บ */
+      function inputValue(field, value) {
+        if (value === undefined || value === null) return '';
+        if (field.type === 'date') return String(value).slice(0, 10);
+        if (field.type === 'datetime') return String(value).slice(0, 16);
+        if (field.type === 'youtube') return value ? 'https://youtu.be/' + value : '';
+        return String(value);
+      }
+
+      function renderFormField(field, value, options, isEdit) {
+        const id = 'crud-' + field.name;
+        const locked = field.createOnly && isEdit;
+        const req = field.required ? ' <span class="field-required" aria-hidden="true">*</span>' : '';
+        const helpId = field.help ? id + '-help' : '';
+        const common = ' id="' + id + '" name="' + field.name + '"' + (field.required ? ' required aria-required="true"' : '') +
+          (locked ? ' disabled' : '') + (helpId ? ' aria-describedby="' + helpId + '"' : '');
+        const help = field.help ? '<p id="' + helpId + '" class="field-help">' + escapeHtml(field.help) + '</p>' : '';
+        if (field.type === 'boolean') {
+          return '<label class="flex min-h-[44px] items-center gap-3"><input type="checkbox" class="checkbox"' + common + (value ? ' checked' : '') + '>' +
+            '<span class="font-medium">' + escapeHtml(field.label) + '</span></label>' + help;
+        }
+        let control;
+        if (field.type === 'select') {
+          control = '<select class="field-input"' + common + '>' +
+            (field.required ? '<option value="">เลือก...</option>' : '') +
+            (options[field.name] || []).map(o => '<option value="' + escapeHtml(o.value) + '"' + (o.value === value ? ' selected' : '') + '>' + escapeHtml(o.label) + '</option>').join('') +
+            '</select>';
+        } else if (field.type === 'textarea') {
+          control = '<textarea class="field-input" rows="' + (field.rows || 3) + '"' + common + (field.max ? ' maxlength="' + field.max + '"' : '') + '>' + escapeHtml(inputValue(field, value)) + '</textarea>';
+        } else {
+          const type = { number: 'number', date: 'date', datetime: 'datetime-local', url: 'url', email: 'email', youtube: 'url' }[field.type] || 'text';
+          control = '<input type="' + type + '" class="field-input"' + common + ' value="' + escapeHtml(inputValue(field, value)) + '"' +
+            (field.max && type === 'text' ? ' maxlength="' + field.max + '"' : '') +
+            (type === 'number' && field.min !== undefined ? ' min="' + field.min + '" max="' + field.max + '"' : '') + '>';
+        }
+        return '<div class="field"><label for="' + id + '" class="field-label">' + escapeHtml(field.label) + req + '</label>' + control + help + '</div>';
+      }
+
+      function openForm(data, record, box) {
+        const spec = data.spec;
+        const isEdit = Boolean(record);
+        const formEl = htmlToElement(
+          '<form class="flex flex-col gap-4" novalidate>' +
+            spec.fields.map(f => renderFormField(f, record ? record[f.name] : f.default, data.options, isEdit)).join('') +
+            '<div data-crud="file"></div>' +
+            '<div data-crud="alert"></div>' +
+            '<div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">' +
+              '<button type="button" class="btn-secondary" data-crud="cancel">ยกเลิก</button>' +
+              '<button type="submit" class="btn-primary">บันทึก</button>' +
+            '</div>' +
+          '</form>'
+        );
+        let dropzone = null;
+        if (spec.file) {
+          const current = record && record[spec.file.field];
+          const fileBox = formEl.querySelector('[data-crud="file"]');
+          if (current) {
+            const url = spec.file.field === 'cover_file_id'
+              ? 'https://lh3.googleusercontent.com/d/' + encodeURIComponent(current)
+              : 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(current);
+            fileBox.insertAdjacentHTML('beforeend', '<p class="mb-2 text-meta">ไฟล์ปัจจุบัน: <a class="link" href="' + escapeHtml(url) + '" target="_blank" rel="noopener">เปิดดู</a> (เลือกไฟล์ใหม่เพื่อแทนที่)</p>');
+          }
+          dropzone = createDropzone({
+            accept: { exts: spec.file.exts, typeText: spec.file.exts.map(e => e.toUpperCase()).join(', ') },
+            label: spec.file.label,
+            maxMb: spec.file.maxMb,
+            required: !isEdit && spec.file.requiredOnCreate
+          });
+          fileBox.appendChild(dropzone.element);
+        }
+        const dialog = modal({ title: (isEdit ? 'แก้ไข' : 'เพิ่ม') + spec.label, content: formEl });
+        formEl.querySelector('[data-crud="cancel"]').addEventListener('click', dialog.close);
+
+        formEl.addEventListener('submit', e => {
+          e.preventDefault();
+          const alertBox = formEl.querySelector('[data-crud="alert"]');
+          const values = isEdit ? { [spec.key]: record[spec.key] } : {};
+          const missing = [];
+          spec.fields.forEach(f => {
+            const el = formEl.elements[f.name];
+            if (!el || el.disabled) return;
+            values[f.name] = f.type === 'boolean' ? el.checked : el.value.trim();
+            if (f.required && f.type !== 'boolean' && !values[f.name]) missing.push(f.label);
+          });
+          if (spec.file && !isEdit && spec.file.requiredOnCreate && !dropzone.getFile()) missing.push('ไฟล์');
+          if (missing.length) {
+            alertBox.innerHTML = renderAlert('danger', 'กรุณากรอก: ' + missing.join(', '));
+            refreshIcons();
+            return;
+          }
+          const button = formEl.querySelector('button[type=submit]');
+          setButtonLoading(button, true, 'กำลังบันทึก...');
+          const file = dropzone && dropzone.getFile();
+          (file ? readFileAsBase64(file).then(b64 => ({ name: file.name, mimeType: file.type, base64: b64 })) : Promise.resolve(null))
+            .then(payload => callServer('adminSaveRecord', sessionToken(), data.table, values, payload))
+            .then(() => {
+              dialog.close();
+              toast('บันทึก' + spec.label + 'แล้ว', 'success');
+              loadTable(data.table, box);
+            })
+            .catch(err => {
+              if (err.code === 'SESSION_EXPIRED') return dialog.close();
+              setButtonLoading(button, false);
+              alertBox.innerHTML = renderAlert('danger', err.message);
+              refreshIcons();
+            });
+        });
+      }
+
+      // ---------- เริ่ม ----------
+
+      refreshIcons();
+      if (current.id === 'overview') return renderOverview();
+      if (current.id === 'submissions') return renderSubmissions();
+      return renderTables(current.tables);
+    }
+  });
+</script>

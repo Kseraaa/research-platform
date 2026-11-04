@@ -164,6 +164,16 @@ function getMySubmissions(sessionToken) {
   - ทำได้เฉพาะสถานะ `revision_requested` ส่งเฉพาะไฟล์ที่แก้ได้ แต่ต้องมีอย่างน้อย 1 ไฟล์ (นับจากไฟล์ที่อัปโหลดด้วย uploadKey รอบนั้น เก็บใน cache)
   - ไฟล์ใหม่เป็น version + 1 ไฟล์เดิมยังอยู่ (`is_current = FALSE`) → สถานะ `resubmitted` + STATUS_LOG (`changed_by = presenter`) + อีเมลถึงผู้ส่ง (`status_changed`) และ `ADMIN_NOTIFY_EMAIL` (`resubmitted_admin`)
 
+**หน้าแอดมิน (admin.gs, เฟส 5):**
+- งานที่ส่ง (reviewer + admin): `adminListSubmissions(token, filters)`, `adminGetSubmission(token, id)`, `adminChangeStatus(token, id, toStatus, note)`
+  - สถานะที่เลือกได้ = `canTransition_()` ยกเว้น `submitted` / `resubmitted` (ของระบบและผู้ส่ง) / ขอให้แก้ไขต้องมีหมายเหตุ / บันทึก STATUS_LOG (`changed_by` = อีเมลผู้ตรวจ) แล้วส่งอีเมล `status_changed`
+- `getFileForViewer(token, fileId)` (files.gs): token เป็น session (admin/reviewer ทุกไฟล์, ครูเฉพาะงานตัวเอง) หรือ track_token ของงานนั้น คืน base64 ให้ client ดาวน์โหลด (`downloadSubmissionFile()` ใน js_upload.html)
+- ข้อมูลเว็บไซต์ (admin เท่านั้น): `adminListRecords(token, table)`, `adminSaveRecord(token, table, record, file?)`, `adminDeleteRecord(token, table, key)`
+  - ทุกตารางกำหนดใน `adminTables_()`: ฟิลด์ (ชนิด, บังคับ, ความยาว, ตัวเลือก), วิธีสร้าง key (`prefix` / `seq` / `manual`), hooks (`beforeSave`, `canDelete`, `afterDelete`) ส่งนิยามให้ client ผ่าน `publicSpec_()` เพื่อสร้างตารางและฟอร์ม
+  - ฟิลด์ที่ไม่ได้นิยามถูกตัดทิ้ง / ฟิลด์ `createOnly` (รหัสรอบ, อีเมลผู้ดูแล) แก้ภายหลังไม่ได้ / บันทึกหรือลบแล้ว `clearPublicCache_()`
+  - กฎเฉพาะตาราง: รอบปัจจุบันมีได้รอบเดียว, ลบรอบที่มีงาน/กำหนดการไม่ได้, ลบหมวดที่ยังมีเอกสาร/วิดีโอไม่ได้, แอดมินลดสิทธิ์/ปิด/ลบตัวเองไม่ได้
+  - ไฟล์เอกสาร (PDF/DOCX/PPTX/XLSX) และรูปปกข่าว (JPG/PNG/WEBP ≤ 5 MB) ตรวจ magic bytes แล้วเก็บใน `_documents` / `_news` แชร์ "ทุกคนที่มีลิงก์ ดูได้" เปลี่ยนไฟล์แล้วไฟล์เก่าย้ายไปถังขยะ ถ้านโยบาย Workspace ห้ามแชร์แบบนี้ จะลบไฟล์ที่เพิ่งสร้างและแจ้งแอดมิน
+
 **อีเมล (email.gs):**
 - `sendEmail_(to, template, data, submissionId)` เรียก Resend ด้วย `UrlFetchApp` (`muteHttpExceptions`) ไม่ throw เสมอ บันทึก `EMAIL_LOG` ทุกครั้ง ส่งไม่สำเร็จเก็บสาเหตุในคอลัมน์ `error`
 - `buildEmail_(template, data)` สร้าง subject + HTML (inline CSS ตาราง กว้างสุด 600px) + ข้อความล้วน escape ทุกค่า ปุ่มลิงก์สร้างเฉพาะ URL `https://`

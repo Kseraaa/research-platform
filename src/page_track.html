@@ -38,7 +38,9 @@
               '<p class="font-medium">' + escapeHtml(fileLabel(f.file_kind)) + '</p>' +
               '<p class="text-meta [overflow-wrap:anywhere]">' + escapeHtml(f.file_name) + '</p>' +
               '<p class="text-meta">ฉบับที่ ' + escapeHtml(f.version) + ' · ' + escapeHtml(formatFileSize(f.size_kb * 1024)) + ' · ' + escapeHtml(formatThaiDate(f.uploaded_at)) + '</p>' +
-            '</div></li>'
+            '</div>' +
+            '<button type="button" class="btn-ghost btn-icon shrink-0" data-file-id="' + escapeHtml(f.file_id) + '" aria-label="ดาวน์โหลด ' + escapeHtml(f.file_name) + '">' +
+              icon('download', 'h-5 w-5') + '</button></li>'
         ).join('') + '</ul>';
       }
 
@@ -119,6 +121,11 @@
         }
         button.addEventListener('click', submit);
       }
+
+      root.addEventListener('click', event => {
+        const button = event.target.closest('[data-file-id]');
+        if (button) downloadSubmissionFile(token, button.dataset.fileId, button);
+      });
 
       const load = () => {
         root.innerHTML = renderSkeleton('text', 8);

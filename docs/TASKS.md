@@ -74,12 +74,12 @@
 
 ## เฟส 5: หน้าแอดมิน
 
-- [ ] `admin.gs`: `adminListSubmissions(filters)`, `adminGetSubmission(id)`, `adminChangeStatus(id, toStatus, note)` (ตรวจ transition ที่อนุญาต → STATUS_LOG → อีเมล)
-- [ ] `getFileForViewer` สำหรับเปิดไฟล์
-- [ ] `page_admin.html`: ตาราง + ตัวกรอง + แผงรายละเอียด + ฟอร์มเปลี่ยนสถานะ + ตัวเลขสรุป (จำนวนตามประเภท/สถานะ)
-- [ ] CRUD: Timeline, รอบกิจกรรม, หมวดหมู่วิดีโอ, วิดีโอ, รายชื่อแอดมิน (admin เท่านั้น) + ล้าง cache
-- [ ] CRUD เอกสารดาวน์โหลด: อัปโหลดไฟล์ (PDF/DOCX/PPTX/XLSX) ลง `_documents` แชร์แบบทุกคนที่มีลิงก์ดูได้, แก้ไข, ปิดการแสดง, จัดการหมวด
-- [ ] CRUD ข่าว: เขียน/แก้ไข, อัปโหลดรูปปก, draft/published, ปักหมุด
+- [x] `admin.gs`: `adminListSubmissions(filters)`, `adminGetSubmission(id)`, `adminChangeStatus(id, toStatus, note)` (ตรวจ transition ที่อนุญาต → STATUS_LOG → อีเมล)
+- [x] `getFileForViewer` สำหรับเปิดไฟล์
+- [x] `page_admin.html`: ตาราง + ตัวกรอง + แผงรายละเอียด + ฟอร์มเปลี่ยนสถานะ + ตัวเลขสรุป (จำนวนตามประเภท/สถานะ)
+- [x] CRUD: Timeline, รอบกิจกรรม, หมวดหมู่วิดีโอ, วิดีโอ, รายชื่อแอดมิน (admin เท่านั้น) + ล้าง cache
+- [x] CRUD เอกสารดาวน์โหลด: อัปโหลดไฟล์ (PDF/DOCX/PPTX/XLSX) ลง `_documents` แชร์แบบทุกคนที่มีลิงก์ดูได้, แก้ไข, ปิดการแสดง, จัดการหมวด
+- [x] CRUD ข่าว: เขียน/แก้ไข, อัปโหลดรูปปก, draft/published, ปักหมุด
 
 > **Prompt:** ทำเฟส 5 ใน docs/TASKS.md reviewer เปลี่ยนสถานะได้ แต่จัดการ Timeline/วิดีโอ/เอกสาร/ข่าว/แอดมินได้เฉพาะ admin reuse dropzone จาก styleguide
 

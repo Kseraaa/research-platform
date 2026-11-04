@@ -38,6 +38,7 @@ claude
    - (ไม่บังคับ) รัน `seedSampleData` เพื่อใส่ข้อมูลตัวอย่างไว้ทดสอบหน้าเว็บ ลบทิ้งด้วย `clearSampleData` (ลบเฉพาะแถวที่ ID มีคำว่า `SAMPLE`)
    - รัน `runSubmissionTests` เพื่อทดสอบการตรวจไฟล์และฟอร์มลงทะเบียน (ไม่สร้างข้อมูลหรือไฟล์ใดๆ)
    - รัน `runAuthTests` เพื่อทดสอบ OTP, session และฟอร์มส่งงานครู
+   - รัน `runAdminTests` เพื่อทดสอบการเปลี่ยนสถานะและการตรวจข้อมูลในหน้าแอดมิน
    - รัน `runEmailTests` เพื่อทดสอบ template อีเมล (ไม่ส่งจริง) และ `sendTestEmail` เพื่อส่งอีเมลจริงทุกแบบไปหาตัวเอง ใช้ตรวจว่าตั้ง `RESEND_API_KEY` / `EMAIL_FROM` ถูก
 5. Deploy → Test deployments → คัดลอก URL `/dev` ไปทดสอบ
 6. ตอน deploy จริง: Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone) แล้วนำ URL `/exec` ไปใส่ใน Script Property `WEBAPP_URL`

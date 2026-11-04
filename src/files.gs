@@ -113,6 +113,37 @@ function createSubmissionFolder_(submissionId, type, year) {
   return getOrCreateFolder_(typeFolder, submissionId);
 }
 
+/**
+ * เปิดไฟล์งานวิจัย (ไฟล์ไม่ได้แชร์ใน Drive จึงส่ง base64 ให้ client สร้างไฟล์ดาวน์โหลด)
+ * token เป็น session ได้ (admin/reviewer ทุกไฟล์, ครูเฉพาะงานตัวเอง) หรือ track_token (เจ้าของงานภายนอก)
+ * @return {{ name: string, mime_type: string, base64: string }}
+ */
+function getFileForViewer(token, fileId) {
+  return wrapApi_(() => {
+    const t = cleanText_(token, 60);
+    const file = findBy_('FILES', 'file_id', cleanText_(fileId, 40));
+    const submission = file ? findBy_('SUBMISSIONS', 'submission_id', file.submission_id) : null;
+    if (!file || !submission || submission.status === STATUSES.DRAFT) throw userError_('ไม่พบไฟล์');
+
+    let allowed = false;
+    if (t && CacheService.getScriptCache().get(sessionCacheKey_(t))) {
+      const user = requireRole_(t, [ROLES.TEACHER, ROLES.REVIEWER, ROLES.ADMIN]);
+      if (ADMIN_ROLES.indexOf(user.role) !== -1) {
+        allowed = true;
+      } else {
+        const presenter = findBy_('PRESENTERS', 'presenter_id', submission.presenter_id);
+        allowed = Boolean(presenter && presenter.email === user.email);
+      }
+    } else {
+      allowed = TRACK_TOKEN_PATTERN.test(t) && submission.track_token === t;
+    }
+    if (!allowed) throw userError_('คุณไม่มีสิทธิ์เปิดไฟล์นี้');
+
+    const blob = DriveApp.getFileById(file.drive_file_id).getBlob();
+    return { name: file.file_name, mime_type: file.mime_type, base64: Utilities.base64Encode(blob.getBytes()) };
+  });
+}
+
 /** ชนิดไฟล์ที่ยังขาดเทียบกับ REQUIRED_FILES[type] */
 function findMissingFiles_(type, currentKinds) {
   return (REQUIRED_FILES[type] || []).filter(kind => currentKinds.indexOf(kind) === -1);

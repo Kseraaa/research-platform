@@ -190,7 +190,7 @@ function getTrackingInfo(trackToken) {
       .map(l => ({ from_status: l.from_status, to_status: l.to_status, note: l.note, changed_at: l.changed_at }));
     const files = readAll_('FILES')
       .filter(f => f.submission_id === submission.submission_id && f.is_current)
-      .map(f => ({ file_kind: f.file_kind, file_name: f.file_name, version: f.version, size_kb: f.size_kb, uploaded_at: f.uploaded_at }));
+      .map(f => ({ file_id: f.file_id, file_kind: f.file_kind, file_name: f.file_name, version: f.version, size_kb: f.size_kb, uploaded_at: f.uploaded_at }));
     return {
       submission_id: submission.submission_id,
       title: submission.title,

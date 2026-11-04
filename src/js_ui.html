@@ -283,14 +283,18 @@
   /**
    * createDropzone({ fileKind, label, required, onChange(file|null), onRetry(file) })
    * 1 ช่องต่อ 1 file_kind ตรวจนามสกุล/MIME/ขนาดก่อนรับไฟล์
+   * ไฟล์ที่ไม่ใช่งานวิจัย (เช่น เอกสารดาวน์โหลด รูปปก) ส่ง accept: { exts: ['pdf', 'pptx'], typeText } แทน fileKind
    * คืน { element, getFile, setFile(file), setUploading(percent), setSuccess(), setError(message), reset() }
    */
   function createDropzone(options) {
-    const spec = (appConfig.fileKinds || {})[options.fileKind] || { ext: 'pdf', mime: 'application/pdf', label: options.fileKind };
+    const kindSpec = (appConfig.fileKinds || {})[options.fileKind] || { ext: 'pdf', mime: 'application/pdf', label: options.fileKind };
+    const exts = options.accept ? options.accept.exts : [kindSpec.ext];
+    const mimes = options.accept ? [] : [kindSpec.mime]; // ไฟล์ทั่วไปไม่ตรวจ MIME (server ตรวจ magic bytes)
+    const spec = { ext: exts[0], mime: mimes[0] };
     const maxMb = options.maxMb || appConfig.maxFileMb || 20;
-    const label = options.label || spec.label;
-    const baseId = 'dz-' + options.fileKind + '-' + Math.random().toString(36).slice(2, 7);
-    const typeText = spec.ext === 'pdf' ? 'PDF' : 'Word (.docx)';
+    const label = options.label || kindSpec.label;
+    const baseId = 'dz-' + (options.fileKind || 'file') + '-' + Math.random().toString(36).slice(2, 7);
+    const typeText = options.accept ? options.accept.typeText : spec.ext === 'pdf' ? 'PDF' : 'Word (.docx)';
 
     const element = document.createElement('div');
     element.className = 'dropzone';
@@ -299,7 +303,7 @@
 
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.' + spec.ext + ',' + spec.mime;
+    input.accept = exts.map(ext => '.' + ext).concat(mimes).join(',');
     input.className = 'sr-only';
     input.tabIndex = -1;
     input.id = baseId + '-input';
@@ -361,8 +365,8 @@
     function validate(candidate) {
       const name = candidate.name.toLowerCase();
       // บางเบราว์เซอร์/เครื่องไม่ส่ง MIME ของ .docx มา (ว่างหรือ octet-stream) server ตรวจ magic bytes ซ้ำอีกรอบ
-      const mimeOk = !candidate.type || candidate.type === spec.mime || candidate.type === 'application/octet-stream';
-      if (!name.endsWith('.' + spec.ext) || !mimeOk) {
+      const mimeOk = !mimes.length || !candidate.type || mimes.indexOf(candidate.type) !== -1 || candidate.type === 'application/octet-stream';
+      if (!exts.some(ext => name.endsWith('.' + ext)) || !mimeOk) {
         return 'ต้องเป็นไฟล์ ' + typeText + ' เท่านั้น';
       }
       if (candidate.size === 0) return 'ไฟล์ว่างเปล่า กรุณาเลือกไฟล์ใหม่';
@@ -618,7 +622,8 @@
         '<thead><tr>' + o.columns.map(c => '<th scope="col">' + escapeHtml(c.label) + '</th>').join('') + '</tr></thead>' +
         '<tbody>' + o.rows.map(row =>
           '<tr>' + o.columns.map(c =>
-            '<td data-label="' + escapeHtml(c.label) + '">' + (c.html ? c.html(row) : escapeHtml(row[c.key])) + '</td>'
+            // ห่อด้วย div: บนมือถือ td เป็น flex (ป้ายชื่อคอลัมน์ + ค่า) เนื้อหาหลายบรรทัดต้องอยู่ในกล่องเดียว
+            '<td data-label="' + escapeHtml(c.label) + '"><div class="min-w-0 flex-1">' + (c.html ? c.html(row) : escapeHtml(row[c.key])) + '</div></td>'
           ).join('') + '</tr>'
         ).join('') + '</tbody>' +
       '</table></div>';

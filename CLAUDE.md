@@ -50,6 +50,7 @@ clasp logs            # ดู log
 ## กฎสำคัญของ Apps Script (ห้ามพลาด)
 
 1. **ไม่มี npm / import / ES modules ใน runtime** ทุกไฟล์ `.gs` อยู่ใน global scope เดียวกัน ห้ามประกาศชื่อฟังก์ชันหรือตัวแปร global ซ้ำข้ามไฟล์
+   - **ค่าคงที่ระดับบนสุด (`const X = ...` นอกฟังก์ชัน) ห้ามอ้างค่าหรือฟังก์ชันจากไฟล์อื่น** Apps Script โหลดไฟล์ทีละไฟล์ตามลำดับชื่อ (`admin.gs` ก่อน `config.gs`) จะเกิด `ReferenceError` ทั้งระบบ ถ้าจำเป็นให้สร้างแบบ lazy ในฟังก์ชัน (ดู `adminTables_()` ใน admin.gs)
 2. **ฟังก์ชันที่ลงท้ายด้วย `_` คือ private** เรียกจาก `google.script.run` ไม่ได้ ใช้กับ helper ทุกตัว ฟังก์ชันที่ไม่มี `_` ถือเป็น public API ที่หน้าเว็บเรียกได้ จึง**ต้องตรวจสิทธิ์และ validate input ทุกครั้ง**
 3. **ฝั่ง client เรียก server ผ่าน `google.script.run` เท่านั้น** ห่อด้วย helper `callServer(fnName, ...args)` ที่คืน Promise (อยู่ใน `js_app.html`)
 4. **ส่งข้อมูลระหว่าง client/server ได้แค่ค่า primitive, array, object ธรรมดา** ห้ามส่ง `Date` (แปลงเป็น ISO string ก่อน)
