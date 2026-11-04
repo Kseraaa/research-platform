@@ -132,7 +132,8 @@ function getFileForViewer(token, fileId) {
         allowed = true;
       } else {
         const presenter = findBy_('PRESENTERS', 'presenter_id', submission.presenter_id);
-        allowed = Boolean(presenter && presenter.email === user.email);
+        // ครูเปิดได้: งานของตัวเอง (ทุกฉบับ) หรือไฟล์ฉบับล่าสุดของงานในคลังงานวิจัย
+        allowed = Boolean(presenter && presenter.email === user.email) || (isLibrarySubmission_(submission) && file.is_current);
       }
     } else {
       allowed = TRACK_TOKEN_PATTERN.test(t) && submission.track_token === t;
@@ -142,6 +143,25 @@ function getFileForViewer(token, fileId) {
     const blob = DriveApp.getFileById(file.drive_file_id).getBlob();
     return { name: file.file_name, mime_type: file.mime_type, base64: Utilities.base64Encode(blob.getBytes()) };
   });
+}
+
+/**
+ * งานเข้าคลังงานวิจัย: แชร์ไฟล์ฉบับล่าสุดแบบ "ทุกคนในโดเมนที่มีลิงก์ ดูได้" (docs/SPEC.md ข้อ 4)
+ * ต้อง deploy จากบัญชี Google Workspace ของโรงเรียน ถ้าแชร์ไม่ได้ (เช่น Gmail ส่วนตัว) แค่บันทึก log
+ * คลังงานวิจัยยังเปิดไฟล์ได้ผ่าน getFileForViewer จึงไม่กระทบการใช้งาน
+ * @return {number} จำนวนไฟล์ที่แชร์สำเร็จ
+ */
+function shareLibraryFiles_(submission) {
+  let shared = 0;
+  readAll_('FILES').filter(f => f.submission_id === submission.submission_id && f.is_current).forEach(f => {
+    try {
+      DriveApp.getFileById(f.drive_file_id).setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
+      shared++;
+    } catch (e) {
+      console.warn('แชร์ไฟล์ ' + f.file_name + ' แบบ domain ไม่ได้: ' + (e && e.message));
+    }
+  });
+  return shared;
 }
 
 /** ชนิดไฟล์ที่ยังขาดเทียบกับ REQUIRED_FILES[type] */

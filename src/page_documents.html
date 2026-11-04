@@ -1,156 +1,25 @@
-<!-- page_documents.html: ศูนย์ดาวน์โหลดเอกสาร (ค้นหาใน hero + sidebar ตัวกรอง + grid การ์ด + pagination / มือถือ: ตัวกรองใน drawer) -->
-<template id="tpl-documents">
-  <section class="container-content section">
-    <div class="lg:grid lg:grid-cols-[260px_1fr] lg:gap-8">
-      <aside class="hidden lg:block" aria-label="ตัวกรองเอกสาร">
-        <div class="card sticky top-24 p-5" data-doc="sidebar"></div>
-      </aside>
-      <div>
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <p class="text-meta" data-doc="summary" aria-live="polite"></p>
-          <button type="button" class="btn-secondary lg:hidden" data-doc="open-filters">
-            <i data-lucide="sliders-horizontal" class="h-4 w-4" aria-hidden="true"></i>ตัวกรอง<span data-doc="filter-count"></span>
-          </button>
-        </div>
-        <div class="mt-4" data-doc="results"></div>
-        <div class="mt-8" data-doc="pager"></div>
-      </div>
-    </div>
-  </section>
-</template>
-
+<!-- page_documents.html: ศูนย์ดาวน์โหลดเอกสาร (โครงจาก mountFilterableList: ค้นหาใน hero + sidebar ตัวกรอง + grid การ์ด + pagination / มือถือ: ตัวกรองใน drawer) -->
 <script>
-  /** แผงตัวกรอง (ใช้ทั้ง sidebar และ drawer มือถือ) */
-  function createDocumentFilters(data, state, onChange) {
-    const total = data.categories.reduce((sum, c) => sum + c.count, 0);
-    const radio = (value, label, count) =>
-      '<label class="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md px-2 hover:bg-surface-alt">' +
-        '<input type="radio" name="doc-category" value="' + escapeHtml(value) + '" class="h-5 w-5 accent-navy-500"' + (state.category === value ? ' checked' : '') + '>' +
-        '<span class="flex-1">' + escapeHtml(label) + '</span><span class="text-sm text-ink-muted">' + count + '</span>' +
-      '</label>';
-
-    const panel = htmlToElement(
-      '<div class="flex flex-col gap-6">' +
-        '<fieldset><legend class="field-label mb-2">หมวดหมู่</legend>' +
-          radio('', 'ทั้งหมด', total) + data.categories.map(c => radio(c.category_id, c.name, c.count)).join('') +
-        '</fieldset>' +
-        '<div class="field"><label class="field-label" for="doc-year-' + (state.panelSeq = (state.panelSeq || 0) + 1) + '">ปีการศึกษา</label>' +
-          '<select id="doc-year-' + state.panelSeq + '" class="field-input" data-filter="year">' +
-            '<option value="">ทุกปี</option>' +
-            data.years.map(y => '<option value="' + y + '"' + (Number(state.year) === y ? ' selected' : '') + '>' + y + '</option>').join('') +
-          '</select></div>' +
-        '<button type="button" class="btn-ghost self-start" data-action="clear-filters">ล้างตัวกรอง</button>' +
-      '</div>'
-    );
-    // ชื่อ radio ต้องไม่ซ้ำระหว่าง sidebar กับ drawer
-    panel.querySelectorAll('input[type=radio]').forEach(input => { input.name = 'doc-category-' + state.panelSeq; });
-    panel.addEventListener('change', event => {
-      if (event.target.type === 'radio') onChange({ category: event.target.value });
-      else if (event.target.dataset.filter === 'year') onChange({ year: event.target.value });
-    });
-    return panel;
-  }
-
   registerPage('documents', {
     render(container, params, isCurrent) {
-      container.innerHTML = renderPageHero(
-        { title: 'ดาวน์โหลดเอกสาร', description: 'แบบฟอร์ม คู่มือ ตัวอย่างรายงานผลการวิจัย และเทมเพลตสำหรับครู' },
-        renderSearchBox({ id: 'doc-search', label: 'ค้นหาเอกสาร', placeholder: 'ค้นหาจากชื่อเอกสารหรือผู้จัดทำ' })
-      );
-      container.appendChild(cloneTemplate('tpl-documents'));
-      const slot = name => container.querySelector('[data-doc="' + name + '"]');
-
-      const state = { q: '', category: '', year: '', page: 1 };
-      let filterData = null;
-      let requestSeq = 0;
-
-      const syncFilterControls = () => {
-        // ใช้ document เพราะ drawer (modal) อยู่นอก container
-        document.querySelectorAll('input[type=radio][name^="doc-category"]').forEach(input => { input.checked = input.value === state.category; });
-        document.querySelectorAll('[data-filter="year"]').forEach(select => { select.value = state.year; });
-        const active = (state.category ? 1 : 0) + (state.year ? 1 : 0);
-        slot('filter-count').textContent = active ? ' (' + active + ')' : '';
-      };
-
-      const update = patch => {
-        Object.assign(state, patch, { page: patch.page || 1 });
-        syncFilterControls();
-        load();
-      };
-
-      const renderResults = result => {
-        const summary = 'พบ ' + result.total + ' รายการ' + (state.q ? ' สำหรับ “' + state.q + '”' : '');
-        slot('summary').textContent = summary;
-        const filtered = Boolean(state.q || state.category || state.year);
-        slot('results').innerHTML = result.items.length
-          ? '<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">' + result.items.map(renderDocumentCard).join('') + '</div>'
-          : filtered
-            ? renderEmptyState({ icon: 'search-x', title: 'ไม่พบเอกสารที่ค้นหา', message: 'ลองเปลี่ยนคำค้นหรือล้างตัวกรอง', actionLabel: 'ล้างตัวกรอง', actionName: 'clear-filters' })
-            : renderEmptyState({ icon: 'folder-open', title: 'ยังไม่มีเอกสารให้ดาวน์โหลด', message: 'เอกสารจะแสดงที่นี่เมื่อแอดมินเพิ่มเข้ามา' });
-        const pager = slot('pager');
-        pager.innerHTML = '';
-        pager.appendChild(createPagination({
-          page: result.page,
-          totalPages: result.totalPages,
-          onChange: page => { slot('summary').scrollIntoView({ block: 'start' }); update({ page: page }); }
-        }));
-      };
-
-      const load = () => {
-        const seq = ++requestSeq;
-        slot('results').innerHTML = renderSkeleton('cards', 6);
-        slot('pager').innerHTML = '';
-        slot('summary').textContent = 'กำลังโหลด...';
-        if (!filterData) slot('sidebar').innerHTML = renderSkeleton('text', 6);
-
-        return callServer('getDocuments', { q: state.q, category: state.category, year: state.year, page: state.page }).then(result => {
-          if (!isCurrent() || seq !== requestSeq) return;
-          if (!filterData) {
-            filterData = { categories: result.categories, years: result.years };
-            const sidebar = slot('sidebar');
-            sidebar.innerHTML = '';
-            sidebar.appendChild(createDocumentFilters(filterData, state, update));
-          }
-          renderResults(result);
-          refreshIcons();
-        }).catch(err => {
-          if (!isCurrent() || seq !== requestSeq) return;
-          slot('summary').textContent = '';
-          slot('results').innerHTML = '';
-          slot('results').appendChild(createErrorState(err.message, load));
-          refreshIcons();
-        });
-      };
-
-      container.querySelector('[data-search-form]').addEventListener('submit', event => {
-        event.preventDefault();
-        update({ q: event.target.q.value.trim() });
+      return mountFilterableList(container, {
+        hero: { title: 'ดาวน์โหลดเอกสาร', description: 'แบบฟอร์ม คู่มือ ตัวอย่างรายงานผลการวิจัย และเทมเพลตสำหรับครู' },
+        search: { id: 'doc-search', label: 'ค้นหาเอกสาร', placeholder: 'ค้นหาจากชื่อเอกสารหรือผู้จัดทำ' },
+        filterNames: ['category', 'year'],
+        fetch: state => callServer('getDocuments', state),
+        filterGroups: result => [
+          {
+            name: 'category', label: 'หมวดหมู่', type: 'radio', allLabel: 'ทั้งหมด',
+            allCount: result.categories.reduce((sum, c) => sum + c.count, 0),
+            options: result.categories.map(c => ({ value: c.category_id, label: c.name, count: c.count }))
+          },
+          { name: 'year', label: 'ปีการศึกษา', type: 'select', allLabel: 'ทุกปี', options: result.years.map(y => ({ value: String(y), label: String(y) })) }
+        ],
+        renderItems: items => items.map(renderDocumentCard).join(''),
+        emptyFiltered: { icon: 'search-x', title: 'ไม่พบเอกสารที่ค้นหา', message: 'ลองเปลี่ยนคำค้นหรือล้างตัวกรอง' },
+        emptyAll: { icon: 'folder-open', title: 'ยังไม่มีเอกสารให้ดาวน์โหลด', message: 'เอกสารจะแสดงที่นี่เมื่อแอดมินเพิ่มเข้ามา' },
+        isCurrent: isCurrent
       });
-
-      slot('open-filters').addEventListener('click', () => {
-        if (!filterData) return;
-        modal({
-          title: 'ตัวกรอง',
-          content: createDocumentFilters(filterData, state, update),
-          actions: [{ label: 'ดูผลลัพธ์', variant: 'primary' }]
-        });
-      });
-
-      // ปุ่มล้างตัวกรอง (ใน sidebar, drawer และ empty state) ฟังที่ document เพราะ drawer อยู่นอก container
-      // เลิกฟังเมื่อออกจากหน้านี้ (router ล้างเนื้อหาใน container ทำให้ pageRoot หลุดจาก DOM)
-      const pageRoot = container.firstElementChild;
-      document.addEventListener('click', function onClear(event) {
-        if (!pageRoot.isConnected) {
-          document.removeEventListener('click', onClear);
-          return;
-        }
-        if (!event.target.closest('[data-action="clear-filters"]')) return;
-        const search = container.querySelector('#doc-search');
-        if (search) search.value = '';
-        update({ q: '', category: '', year: '' });
-      });
-
-      return load();
     }
   });
 </script>

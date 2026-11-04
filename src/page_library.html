@@ -1,1 +1,32 @@
-<!-- page_library.html: คลังงานวิจัย (เฟส 6) -->
+<!-- page_library.html: คลังงานวิจัย (ครู + แอดมิน) โครงเดียวกับศูนย์ดาวน์โหลดเอกสาร (mountFilterableList)
+     แสดงเฉพาะงานที่เจ้าของอนุญาตเผยแพร่และผ่านการพิจารณา/บันทึกเข้าคลังแล้ว เปิดไฟล์ผ่าน getFileForViewer -->
+<script>
+  registerPage('library', {
+    render(container, params, isCurrent) {
+      const typeLabel = type => (appConfig.typeLabels || {})[type] || type;
+      return mountFilterableList(container, {
+        hero: { title: 'คลังงานวิจัย', description: 'งานวิจัยของครูและผลงานที่นำเสนอ ซึ่งเจ้าของอนุญาตให้เผยแพร่ภายในโรงเรียน' },
+        search: { id: 'library-search', label: 'ค้นหางานวิจัย', placeholder: 'ค้นหาจากชื่อเรื่องหรือชื่อผู้วิจัย' },
+        filterNames: ['type', 'year', 'subject'],
+        fetch: state => callServer('getLibrary', sessionToken(), state),
+        filterGroups: result => [
+          {
+            name: 'type', label: 'ประเภท', type: 'radio', allLabel: 'ทั้งหมด',
+            allCount: result.types.reduce((sum, t) => sum + t.count, 0),
+            options: result.types.map(t => ({ value: t.value, label: typeLabel(t.value), count: t.count }))
+          },
+          { name: 'year', label: 'ปีการศึกษา', type: 'select', allLabel: 'ทุกปี', options: result.years.map(y => ({ value: String(y), label: String(y) })) },
+          { name: 'subject', label: 'สาขา / กลุ่มสาระ', type: 'select', allLabel: 'ทุกสาขา', options: result.subjects.map(s => ({ value: s, label: s })) }
+        ],
+        renderItems: items => items.map(renderResearchCard).join(''),
+        emptyFiltered: { icon: 'search-x', title: 'ไม่พบงานวิจัยที่ค้นหา', message: 'ลองเปลี่ยนคำค้นหรือล้างตัวกรอง' },
+        emptyAll: { icon: 'library', title: 'ยังไม่มีงานในคลัง', message: 'งานที่ผ่านการพิจารณาและเจ้าของอนุญาตเผยแพร่จะแสดงที่นี่' },
+        isCurrent: isCurrent,
+        onClick: event => {
+          const button = event.target.closest('[data-file-id]');
+          if (button) downloadSubmissionFile(sessionToken(), button.dataset.fileId, button);
+        }
+      });
+    }
+  });
+</script>

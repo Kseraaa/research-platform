@@ -164,6 +164,11 @@ function getMySubmissions(sessionToken) {
   - ทำได้เฉพาะสถานะ `revision_requested` ส่งเฉพาะไฟล์ที่แก้ได้ แต่ต้องมีอย่างน้อย 1 ไฟล์ (นับจากไฟล์ที่อัปโหลดด้วย uploadKey รอบนั้น เก็บใน cache)
   - ไฟล์ใหม่เป็น version + 1 ไฟล์เดิมยังอยู่ (`is_current = FALSE`) → สถานะ `resubmitted` + STATUS_LOG (`changed_by = presenter`) + อีเมลถึงผู้ส่ง (`status_changed`) และ `ADMIN_NOTIFY_EMAIL` (`resubmitted_admin`)
 
+**คลังงานวิจัย (เฟส 6):**
+- `getLibrary(sessionToken, filters)` (public.gs) ครู/ผู้ตรวจ/แอดมิน: งาน `allow_publish = TRUE` และสถานะ `accepted`/`recorded` (`isLibrarySubmission_()`) cache 10 นาที ไม่คืนอีเมล/เบอร์โทร/token/`drive_file_id`
+- `adminChangeStatus` เป็น accepted/recorded แล้วงานเข้าคลัง → `shareLibraryFiles_()` แชร์ไฟล์ฉบับล่าสุดแบบ `DOMAIN_WITH_LINK` + ล้าง cache
+- ปุ่มเปิดไฟล์ในคลังใช้ `getFileForViewer` (ครูเปิดไฟล์ฉบับล่าสุดของงานในคลังได้) จึงใช้ได้แม้การแชร์แบบ domain จะล้มเหลว (เช่น deploy จาก Gmail ส่วนตัว)
+
 **หน้าแอดมิน (admin.gs, เฟส 5):**
 - งานที่ส่ง (reviewer + admin): `adminListSubmissions(token, filters)`, `adminGetSubmission(token, id)`, `adminChangeStatus(token, id, toStatus, note)`
   - สถานะที่เลือกได้ = `canTransition_()` ยกเว้น `submitted` / `resubmitted` (ของระบบและผู้ส่ง) / ขอให้แก้ไขต้องมีหมายเหตุ / บันทึก STATUS_LOG (`changed_by` = อีเมลผู้ตรวจ) แล้วส่งอีเมล `status_changed`

@@ -101,6 +101,68 @@ function getVideos() {
   }));
 }
 
+// ---------- คลังงานวิจัย (ต้องล็อกอิน) ----------
+
+const LIBRARY_PAGE_SIZE = 12;
+const LIBRARY_STATUSES = Object.freeze(['accepted', 'recorded']);
+
+/**
+ * คลังงานวิจัย: เฉพาะ allow_publish = TRUE และสถานะ accepted/recorded ไม่คืนข้อมูลติดต่อ
+ * @param {{ q?, type?, year?, subject?, page? }} filters
+ * @return {{ items, page, totalPages, total, types: {value, count}[], years: number[], subjects: string[] }}
+ */
+function getLibrary(sessionToken, filters) {
+  return wrapApi_(() => {
+    requireRole_(sessionToken, [ROLES.TEACHER, ROLES.REVIEWER, ROLES.ADMIN]);
+    const f = asObject_(filters);
+    const q = cleanText_(f.q, 100).toLowerCase();
+    const type = cleanText_(f.type, 20);
+    const subject = cleanText_(f.subject, 100);
+    const year = toPositiveInt_(f.year, 0);
+    const items = getLibraryData_();
+
+    const matched = items.filter(item =>
+      (!q || item.title.toLowerCase().indexOf(q) !== -1 || item.authors.some(a => String(a).toLowerCase().indexOf(q) !== -1)) &&
+      (!type || item.type === type) &&
+      (!subject || item.subject_area === subject) &&
+      (!year || item.academic_year === year)
+    );
+    const result = paginate_(matched, f.page, LIBRARY_PAGE_SIZE);
+    result.types = ['oral', 'poster', 'teacher'].map(t => ({ value: t, count: items.filter(i => i.type === t).length })).filter(t => t.count);
+    result.years = items.map(i => i.academic_year).filter((y, i, all) => y && all.indexOf(y) === i).sort((a, b) => b - a);
+    result.subjects = items.map(i => i.subject_area).filter((s, i, all) => s && all.indexOf(s) === i).sort((a, b) => a.localeCompare(b, 'th'));
+    return result;
+  });
+}
+
+/** งานที่อยู่ในคลัง (ใช้ตรวจสิทธิ์เปิดไฟล์ใน files.gs ด้วย) */
+function isLibrarySubmission_(submission) {
+  return submission.allow_publish === true && LIBRARY_STATUSES.indexOf(submission.status) !== -1;
+}
+
+function getLibraryData_() {
+  return cachedRead_('library', () => {
+    const presenters = {};
+    readAll_('PRESENTERS').forEach(p => { presenters[p.presenter_id] = p; });
+    const files = readAll_('FILES').filter(f => f.is_current);
+    return readAll_('SUBMISSIONS')
+      .filter(isLibrarySubmission_)
+      .sort((a, b) => toTime_(b.submitted_at) - toTime_(a.submitted_at))
+      .map(s => ({
+        submission_id: s.submission_id,
+        title: s.title,
+        authors: Array.isArray(s.authors) ? s.authors : [],
+        organization: (presenters[s.presenter_id] || {}).organization || '',
+        type: s.type,
+        subject_area: s.subject_area,
+        academic_year: Number(s.academic_year) || '',
+        abstract_short: s.abstract_short,
+        files: files.filter(f => f.submission_id === s.submission_id)
+          .map(f => ({ file_id: f.file_id, file_kind: f.file_kind, file_name: f.file_name }))
+      }));
+  });
+}
+
 // ---------- ข้อมูลที่ใช้ร่วมกัน ----------
 
 /** รอบกิจกรรมปัจจุบัน (is_current = TRUE) หรือ null */

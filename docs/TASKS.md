@@ -85,9 +85,9 @@
 
 ## เฟส 6: คลังงานวิจัย
 
-- [ ] `getLibrary(sessionToken, filters)`: เฉพาะ `allow_publish = TRUE` และสถานะ `accepted`/`recorded` ไม่คืนข้อมูลติดต่อ
-- [ ] เมื่อเปลี่ยนเป็น `accepted`/`recorded` และ allow_publish → แชร์ไฟล์ current แบบ domain view
-- [ ] `page_library.html`: ค้นหา, กรองปี/ประเภท/สาขา, การ์ดงาน, ปุ่มเปิดไฟล์
+- [x] `getLibrary(sessionToken, filters)`: เฉพาะ `allow_publish = TRUE` และสถานะ `accepted`/`recorded` ไม่คืนข้อมูลติดต่อ
+- [x] เมื่อเปลี่ยนเป็น `accepted`/`recorded` และ allow_publish → แชร์ไฟล์ current แบบ domain view
+- [x] `page_library.html`: ค้นหา, กรองปี/ประเภท/สาขา, การ์ดงาน, ปุ่มเปิดไฟล์
 
 ## เฟส 7: ความเรียบร้อยก่อนใช้งานจริง
 

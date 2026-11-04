@@ -97,7 +97,11 @@ function adminChangeStatus(sessionToken, submissionId, toStatus, note) {
       return updateBy_('SUBMISSIONS', 'submission_id', submission.submission_id, { status: target, reviewer_note: cleanNote });
     });
 
-    // เฟส 6: งานที่ accepted/recorded และ allow_publish → แชร์ไฟล์ current แบบ domain view ที่นี่
+    // เข้าคลังงานวิจัย: แชร์ไฟล์ฉบับล่าสุดแบบ domain view และล้าง cache ของคลัง
+    if (isLibrarySubmission_(updated)) {
+      shareLibraryFiles_(updated);
+      clearPublicCache_();
+    }
 
     const presenter = findBy_('PRESENTERS', 'presenter_id', updated.presenter_id);
     if (presenter) {

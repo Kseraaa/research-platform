@@ -117,6 +117,8 @@
       <h2 id="sg-cards" class="heading-2">การ์ดเอกสารและวิดีโอ</h2>
       <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-sg="doc-cards"></div>
       <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-sg="video-cards"></div>
+      <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-sg="research-cards"></div>
+      <div class="card mt-4 max-w-xs p-5" data-sg="filters"></div>
     </section>
 
     <section aria-labelledby="sg-public">
@@ -306,6 +308,20 @@
         hint: 'เก็บรหัสงานนี้ไว้ใช้อ้างอิง',
         actions: [{ label: 'กลับหน้าหลัก', route: 'home' }, { label: 'ปุ่มแบบ onClick', variant: 'secondary', onClick: () => toast('กดแล้ว', 'info') }]
       }));
+
+      // การ์ดงานวิจัย + แผงตัวกรอง
+      slot('research-cards').innerHTML = [
+        { title: 'การพัฒนาทักษะการอ่านจับใจความด้วยบทเรียนออนไลน์', authors: ['สมศรี รักสอน', 'สมชาย ใจดี'], type: 'teacher', subject_area: 'ภาษาไทย', academic_year: 2569,
+          abstract_short: 'งานวิจัยนี้มีวัตถุประสงค์เพื่อพัฒนาทักษะการอ่านจับใจความของนักเรียนชั้นมัธยมศึกษาปีที่ 2 ด้วยบทเรียนออนไลน์ที่ผู้วิจัยสร้างขึ้น',
+          files: [{ file_id: 'x1', file_kind: 'research_pdf' }, { file_id: 'x2', file_kind: 'research_docx' }] },
+        { title: 'ผลของกิจกรรมสะเต็มต่อความคิดสร้างสรรค์', authors: ['ครูภายนอก'], organization: 'โรงเรียนตัวอย่าง', type: 'poster', subject_area: 'วิทยาศาสตร์', academic_year: 2568,
+          files: [{ file_id: 'x3', file_kind: 'abstract_pdf' }, { file_id: 'x4', file_kind: 'abstract_docx' }, { file_id: 'x5', file_kind: 'poster_pdf' }] }
+      ].map(renderResearchCard).join('');
+      const filterValues = { type: '', year: '2569' };
+      slot('filters').appendChild(createFilterPanel([
+        { name: 'type', label: 'ประเภท', type: 'radio', allLabel: 'ทั้งหมด', allCount: 5, options: [{ value: 'oral', label: 'Oral', count: 2 }, { value: 'poster', label: 'Poster', count: 3 }] },
+        { name: 'year', label: 'ปีการศึกษา', type: 'select', allLabel: 'ทุกปี', options: [{ value: '2569', label: '2569' }, { value: '2568', label: '2568' }] }
+      ], filterValues, (name, value) => toast('ตัวกรอง ' + name + ' = ' + (value || 'ทั้งหมด'), 'info')));
 
       // แท็บ + pagination
       const tabsOutput = slot('tabs-output');

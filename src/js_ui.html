@@ -730,6 +730,180 @@
       .join('');
   }
 
+  // ---------- การ์ดงานวิจัย (คลังงานวิจัย) ----------
+
+  /** ชื่อสั้นของไฟล์บนปุ่ม: research_pdf → PDF, abstract_docx → Abstract Word, poster_pdf → Poster */
+  function shortFileLabel(kind) {
+    if (kind.indexOf('poster') === 0) return 'Poster';
+    const ext = kind.slice(-3) === 'pdf' ? 'PDF' : 'Word';
+    return kind.indexOf('abstract') === 0 ? 'Abstract ' + ext : ext;
+  }
+
+  /**
+   * renderResearchCard({ title, authors[], organization, type, subject_area, academic_year, abstract_short, files: [{ file_id, file_kind, file_name }] })
+   * ปุ่มไฟล์มี data-file-id ให้หน้าเรียก downloadSubmissionFile()
+   */
+  function renderResearchCard(item) {
+    const typeLabel = (appConfig.typeLabels || {})[item.type] || item.type;
+    const meta = [item.subject_area, item.academic_year ? 'ปีการศึกษา ' + item.academic_year : '', item.organization].filter(Boolean).map(escapeHtml).join(' · ');
+    return '<article class="card card-hover flex flex-col gap-3 p-4">' +
+      '<span class="badge-neutral self-start">' + escapeHtml(typeLabel) + '</span>' +
+      '<h3 class="heading-3 line-clamp-2 [overflow-wrap:anywhere]">' + escapeHtml(item.title) + '</h3>' +
+      '<p class="text-meta line-clamp-1">' + escapeHtml((item.authors || []).join(', ')) + '</p>' +
+      (meta ? '<p class="text-meta">' + meta + '</p>' : '') +
+      (item.abstract_short ? '<p class="text-sm line-clamp-3">' + escapeHtml(item.abstract_short) + '</p>' : '') +
+      '<div class="mt-auto flex flex-wrap gap-2 pt-1">' + (item.files || []).map(f =>
+        '<button type="button" class="btn-secondary min-h-[40px] px-3 text-sm" data-file-id="' + escapeHtml(f.file_id) + '">' +
+          icon('download', 'h-4 w-4') + escapeHtml(shortFileLabel(f.file_kind)) +
+          '<span class="sr-only"> ' + escapeHtml(item.title) + '</span></button>').join('') +
+      '</div>' +
+    '</article>';
+  }
+
+  // ---------- ตัวกรอง + หน้ารายการแบบค้นหา/กรอง ----------
+
+  /**
+   * แผงตัวกรอง (ใช้ทั้ง sidebar และ drawer มือถือ)
+   * groups: [{ name, label, type: 'radio' | 'select', allLabel, allCount?, options: [{ value, label, count? }] }]
+   * ทุก input มี data-filter-name เพื่อให้ syncFilterPanels() อัปเดตทุกแผงพร้อมกัน
+   */
+  function createFilterPanel(groups, values, onChange) {
+    const seq = Math.random().toString(36).slice(2, 7);
+    const countHtml = count => count === undefined ? '' : '<span class="text-sm text-ink-muted">' + count + '</span>';
+    const panel = htmlToElement('<div class="flex flex-col gap-6">' + groups.map(g => {
+      const current = String(values[g.name] || '');
+      if (g.type === 'radio') {
+        return '<fieldset><legend class="field-label mb-2">' + escapeHtml(g.label) + '</legend>' +
+          [{ value: '', label: g.allLabel, count: g.allCount }].concat(g.options).map(opt =>
+            '<label class="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md px-2 hover:bg-surface-alt">' +
+              '<input type="radio" name="f-' + escapeHtml(g.name) + '-' + seq + '" data-filter-name="' + escapeHtml(g.name) + '" value="' + escapeHtml(opt.value) + '"' +
+                ' class="h-5 w-5 accent-navy-500"' + (String(opt.value) === current ? ' checked' : '') + '>' +
+              '<span class="flex-1">' + escapeHtml(opt.label) + '</span>' + countHtml(opt.count) +
+            '</label>').join('') +
+          '</fieldset>';
+      }
+      const id = 'f-' + g.name + '-' + seq;
+      return '<div class="field"><label class="field-label" for="' + escapeHtml(id) + '">' + escapeHtml(g.label) + '</label>' +
+        '<select id="' + escapeHtml(id) + '" class="field-input" data-filter-name="' + escapeHtml(g.name) + '">' +
+          '<option value="">' + escapeHtml(g.allLabel) + '</option>' +
+          g.options.map(opt => '<option value="' + escapeHtml(opt.value) + '"' + (String(opt.value) === current ? ' selected' : '') + '>' +
+            escapeHtml(opt.label) + (opt.count !== undefined ? ' (' + opt.count + ')' : '') + '</option>').join('') +
+        '</select></div>';
+    }).join('') + '<button type="button" class="btn-ghost self-start" data-action="clear-filters">ล้างตัวกรอง</button></div>');
+    panel.addEventListener('change', event => {
+      const name = event.target.dataset.filterName;
+      if (name) onChange(name, event.target.value);
+    });
+    return panel;
+  }
+
+  /** ตั้งค่าทุกแผงตัวกรองที่เปิดอยู่ (sidebar + drawer) ให้ตรงกับ values */
+  function syncFilterPanels(values) {
+    document.querySelectorAll('[data-filter-name]').forEach(el => {
+      const value = String(values[el.dataset.filterName] || '');
+      if (el.type === 'radio') el.checked = el.value === value;
+      else el.value = value;
+    });
+  }
+
+  /**
+   * หน้ารายการแบบ ค้นหาใน hero + sidebar ตัวกรอง (มือถือ: drawer) + grid + pagination
+   * ใช้กับศูนย์ดาวน์โหลดเอกสารและคลังงานวิจัย
+   * o: {
+   *   hero: { title, description }, search: { id, label, placeholder },
+   *   filterNames: ['category', 'year'],
+   *   fetch(state) → Promise<{ items, page, totalPages, total, ... }>,
+   *   filterGroups(result) → groups ของ createFilterPanel (สร้างครั้งเดียวจากผลลัพธ์แรก),
+   *   renderItems(items) → HTML, gridClass, emptyFiltered, emptyAll (ตัวเลือกของ renderEmptyState),
+   *   isCurrent, onClick(event)?
+   * }
+   */
+  function mountFilterableList(container, o) {
+    container.innerHTML = renderPageHero(o.hero, renderSearchBox(o.search)) +
+      '<section class="container-content section"><div class="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8">' +
+        '<aside class="hidden lg:block" aria-label="ตัวกรอง"><div class="card sticky top-24 p-5" data-fl="sidebar"></div></aside>' +
+        '<div class="min-w-0">' +
+          '<div class="flex flex-wrap items-center justify-between gap-3">' +
+            '<p class="text-meta" data-fl="summary" aria-live="polite"></p>' +
+            '<button type="button" class="btn-secondary lg:hidden" data-fl="open-filters">' + icon('sliders-horizontal', 'h-4 w-4') + 'ตัวกรอง<span data-fl="filter-count"></span></button>' +
+          '</div>' +
+          '<div class="mt-4" data-fl="results"></div><div class="mt-8" data-fl="pager"></div>' +
+        '</div>' +
+      '</div></section>';
+    const slot = name => container.querySelector('[data-fl="' + name + '"]');
+    const state = { q: '', page: 1 };
+    o.filterNames.forEach(name => { state[name] = ''; });
+    let groups = null;
+    let requestSeq = 0;
+
+    const update = patch => {
+      Object.assign(state, patch, { page: patch.page || 1 });
+      syncFilterPanels(state);
+      const active = o.filterNames.filter(name => state[name]).length;
+      slot('filter-count').textContent = active ? ' (' + active + ')' : '';
+      load();
+    };
+    const onFilterChange = (name, value) => update({ [name]: value });
+
+    const load = () => {
+      const seq = ++requestSeq;
+      slot('results').innerHTML = renderSkeleton('cards', 6);
+      slot('pager').innerHTML = '';
+      slot('summary').textContent = 'กำลังโหลด...';
+      if (!groups) slot('sidebar').innerHTML = renderSkeleton('text', 6);
+
+      return o.fetch(Object.assign({}, state)).then(result => {
+        if (!o.isCurrent() || seq !== requestSeq) return;
+        if (!groups) {
+          groups = o.filterGroups(result);
+          slot('sidebar').innerHTML = '';
+          slot('sidebar').appendChild(createFilterPanel(groups, state, onFilterChange));
+        }
+        slot('summary').textContent = 'พบ ' + result.total + ' รายการ' + (state.q ? ' สำหรับ “' + state.q + '”' : '');
+        const filtered = Boolean(state.q || o.filterNames.some(name => state[name]));
+        slot('results').innerHTML = result.items.length
+          ? '<div class="' + (o.gridClass || 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3') + '">' + o.renderItems(result.items) + '</div>'
+          : renderEmptyState(filtered ? Object.assign({ actionLabel: 'ล้างตัวกรอง', actionName: 'clear-filters' }, o.emptyFiltered) : o.emptyAll);
+        slot('pager').appendChild(createPagination({
+          page: result.page,
+          totalPages: result.totalPages,
+          onChange: page => { slot('summary').scrollIntoView({ block: 'start' }); update({ page: page }); }
+        }));
+        refreshIcons();
+      }).catch(err => {
+        if (!o.isCurrent() || seq !== requestSeq || err.code === 'SESSION_EXPIRED') return;
+        slot('summary').textContent = '';
+        slot('results').innerHTML = '';
+        slot('results').appendChild(createErrorState(err.message, load));
+        refreshIcons();
+      });
+    };
+
+    container.querySelector('[data-search-form]').addEventListener('submit', event => {
+      event.preventDefault();
+      update({ q: event.target.q.value.trim() });
+    });
+    slot('open-filters').addEventListener('click', () => {
+      if (!groups) return;
+      modal({ title: 'ตัวกรอง', content: createFilterPanel(groups, state, onFilterChange), actions: [{ label: 'ดูผลลัพธ์', variant: 'primary' }] });
+    });
+    if (o.onClick) slot('results').addEventListener('click', o.onClick);
+
+    // ปุ่มล้างตัวกรอง (sidebar, drawer, empty state) ฟังที่ document เพราะ drawer อยู่นอก container
+    // เลิกฟังเมื่อออกจากหน้า (router ล้าง container ทำให้ pageRoot หลุดจาก DOM)
+    const pageRoot = container.firstElementChild;
+    document.addEventListener('click', function onClear(event) {
+      if (!pageRoot.isConnected) return document.removeEventListener('click', onClear);
+      if (!event.target.closest('[data-action="clear-filters"]')) return;
+      container.querySelector('#' + o.search.id).value = '';
+      const cleared = { q: '' };
+      o.filterNames.forEach(name => { cleared[name] = ''; });
+      update(cleared);
+    });
+
+    return load();
+  }
+
   // ---------- หน้าส่งสำเร็จ ----------
 
   /**

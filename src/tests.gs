@@ -394,6 +394,17 @@ function runAdminTests() {
     validateAdminRecord_(adminTables_().EVENTS, { event_id: 'EVT-1', name: 'ก', year: 2569, open_date: '2026-11-01', close_date: '2026-11-02', oral_template_url: 'javascript:alert(1)' }, true, {}), /https/));
 
   const docSpec = adminTables_().DOCUMENTS.file;
+  t.test('คลังงานวิจัย: เฉพาะ allow_publish + accepted/recorded', () => {
+    const cases = [
+      [{ allow_publish: true, status: 'accepted' }, true],
+      [{ allow_publish: true, status: 'recorded' }, true],
+      [{ allow_publish: false, status: 'accepted' }, false],
+      [{ allow_publish: true, status: 'under_review' }, false],
+      [{ allow_publish: true, status: 'rejected' }, false]
+    ];
+    cases.forEach(c => { if (isLibrarySubmission_(c[0]) !== c[1]) throw new Error(JSON.stringify(c[0])); });
+  });
+
   t.test('ไฟล์เอกสาร PPTX ถูกต้อง', () => {
     const r = validatePublicUpload_(docSpec, { name: 'slide.pptx', base64: Utilities.base64Encode([0x50, 0x4B, 0x03, 0x04, 0x00]) });
     if (r.ext !== 'pptx') throw new Error(r.ext);
