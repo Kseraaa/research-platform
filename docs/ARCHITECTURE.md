@@ -148,6 +148,18 @@ function getMySubmissions(sessionToken) {
 - คลังงานวิจัย (Workspace): เมื่องานเข้าคลัง ตั้ง `setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW)` แล้วให้ลิงก์ Drive
 - ศูนย์ดาวน์โหลดเอกสารและรูปปกข่าว: เป็นข้อมูลสาธารณะ ตั้ง `setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)` ตอนแอดมินอัปโหลด ลิงก์ดาวน์โหลด `https://drive.google.com/uc?export=download&id={fileId}` **ห้ามใช้วิธีนี้กับไฟล์งานวิจัยที่ผู้ใช้ส่งมา**
 
+**ติดตามสถานะและฉบับแก้ไข (เฟส 3)** ใช้ `track_token` จากลิงก์ในอีเมลแทนการล็อกอิน:
+- `getTrackingInfo(trackToken)`: สถานะ ประวัติ หมายเหตุ ไฟล์ปัจจุบัน ไม่คืน token / อีเมล / เบอร์โทร / ผู้เปลี่ยนสถานะ / `drive_file_id` และงาน draft ถือว่าไม่พบ
+- ฉบับแก้ไขเป็น 3 ขั้นเหมือนการส่งงาน: `startRevision(trackToken)` → `uploadRevisionFile(trackToken, uploadKey, ...)` ทีละไฟล์ → `submitRevision(trackToken, uploadKey)`
+  - ทำได้เฉพาะสถานะ `revision_requested` ส่งเฉพาะไฟล์ที่แก้ได้ แต่ต้องมีอย่างน้อย 1 ไฟล์ (นับจากไฟล์ที่อัปโหลดด้วย uploadKey รอบนั้น เก็บใน cache)
+  - ไฟล์ใหม่เป็น version + 1 ไฟล์เดิมยังอยู่ (`is_current = FALSE`) → สถานะ `resubmitted` + STATUS_LOG (`changed_by = presenter`) + อีเมลถึงผู้ส่ง (`status_changed`) และ `ADMIN_NOTIFY_EMAIL` (`resubmitted_admin`)
+
+**อีเมล (email.gs):**
+- `sendEmail_(to, template, data, submissionId)` เรียก Resend ด้วย `UrlFetchApp` (`muteHttpExceptions`) ไม่ throw เสมอ บันทึก `EMAIL_LOG` ทุกครั้ง ส่งไม่สำเร็จเก็บสาเหตุในคอลัมน์ `error`
+- `buildEmail_(template, data)` สร้าง subject + HTML (inline CSS ตาราง กว้างสุด 600px) + ข้อความล้วน escape ทุกค่า ปุ่มลิงก์สร้างเฉพาะ URL `https://`
+- ลิงก์ในอีเมลใช้ Script Property `WEBAPP_URL` ถ้าไม่ได้ตั้งใช้ `ScriptApp.getService().getUrl()` / บุคคลภายนอกได้ลิงก์ `?page=track&t=` ครูได้ลิงก์ `?page=teacher`
+- ทดสอบ: `runEmailTests()` (ไม่ส่งจริง) และ `sendTestEmail()` (ส่งจริงทุก template ไปหาเจ้าของสคริปต์)
+
 ## 7. การเขียน Sheets และ concurrency
 
 - `withLock_(fn)` ใช้ `LockService.getScriptLock().waitLock(20000)` ครอบทุกการเขียน

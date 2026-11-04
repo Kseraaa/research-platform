@@ -55,11 +55,11 @@
 
 ## เฟส 3: อีเมล + หน้าติดตามสถานะ
 
-- [ ] `email.gs`: `sendEmail_(to, template, data, submissionId)` ผ่าน Resend + บันทึก EMAIL_LOG (ล้มเหลวต้องไม่ทำให้งานหลักพัง)
-- [ ] template HTML ภาษาไทย: `submitted`, `status_changed`, `resubmitted_admin`, `otp`
-- [ ] เรียกอีเมล `submitted` ใน `finalizeSubmission`
-- [ ] `getTrackingInfo(trackToken)` + `page_track.html` (สถานะ, ประวัติ, หมายเหตุ)
-- [ ] `submitRevision(trackToken, ...)` สำหรับสถานะ `revision_requested` (version ใหม่, `is_current`)
+- [x] `email.gs`: `sendEmail_(to, template, data, submissionId)` ผ่าน Resend + บันทึก EMAIL_LOG (ล้มเหลวต้องไม่ทำให้งานหลักพัง)
+- [x] template HTML ภาษาไทย: `submitted`, `status_changed`, `resubmitted_admin`, `otp`
+- [x] เรียกอีเมล `submitted` ใน `finalizeSubmission`
+- [x] `getTrackingInfo(trackToken)` + `page_track.html` (สถานะ, ประวัติ, หมายเหตุ)
+- [x] `submitRevision(trackToken, ...)` สำหรับสถานะ `revision_requested` (version ใหม่, `is_current`)
 
 > **Prompt:** ทำเฟส 3 ใน docs/TASKS.md อีเมลต้องดูดีบนมือถือ ใช้ inline CSS และมีลิงก์ติดตามสถานะ
 

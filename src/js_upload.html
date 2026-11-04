@@ -38,7 +38,7 @@
     return readFileAsBase64(file, ratio => show(ratio * 30)).then(base64 => {
       show(30);
       const timer = setInterval(() => show(Math.min(90, percent + (90 - percent) * 0.08)), 400);
-      return withRetry(() => callServer('uploadFile', o.submissionId, o.uploadKey, o.fileKind, file.name, file.type, base64), UPLOAD_RETRIES)
+      return withRetry(() => callServer(o.uploadFn || 'uploadFile', o.submissionId, o.uploadKey, o.fileKind, file.name, file.type, base64), UPLOAD_RETRIES)
         .finally(() => clearInterval(timer));
     }).then(result => {
       dz.setSuccess();
@@ -51,12 +51,14 @@
 
   /**
    * อัปโหลดหลายไฟล์ตามลำดับ ข้ามไฟล์ที่สำเร็จแล้ว (ใน done) เพื่อให้กดลองใหม่ได้โดยไม่ส่งซ้ำ
-   * @param {{ submissionId, uploadKey, items: { fileKind, dropzone }[], done: Object }} o
+   * @param {{ submissionId, uploadKey, items: { fileKind, dropzone }[], done: Object, uploadFn? }} o
+   *   uploadFn: ฟังก์ชันฝั่ง server (ค่าเริ่มต้น 'uploadFile') อาร์กิวเมนต์แรกคือ submissionId
+   *   ส่งฉบับแก้ไขใช้ uploadFn = 'uploadRevisionFile' และส่ง track token แทน submissionId
    */
   function uploadFilesInOrder(o) {
     return o.items.reduce((chain, item) => chain.then(() => {
       if (o.done[item.fileKind]) return null;
-      return uploadOneFile({ submissionId: o.submissionId, uploadKey: o.uploadKey, fileKind: item.fileKind, dropzone: item.dropzone })
+      return uploadOneFile({ submissionId: o.submissionId, uploadKey: o.uploadKey, fileKind: item.fileKind, dropzone: item.dropzone, uploadFn: o.uploadFn })
         .then(result => { o.done[item.fileKind] = result; });
     }), Promise.resolve());
   }

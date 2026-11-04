@@ -97,6 +97,12 @@ const STATUSES = Object.freeze({
   RECORDED: 'recorded'
 });
 
+const TYPE_LABELS_TH = Object.freeze({
+  teacher: 'งานวิจัยของครู',
+  oral: 'นำเสนอแบบ Oral',
+  poster: 'นำเสนอแบบ Poster'
+});
+
 const STATUS_LABELS_TH = Object.freeze({
   draft: 'กำลังอัปโหลดไฟล์',
   submitted: 'ส่งงานแล้ว',
@@ -205,6 +211,7 @@ function getClientConfig_() {
     schoolName: SCHOOL_NAME,
     contact: ORG_CONTACT,
     statusLabels: STATUS_LABELS_TH,
+    typeLabels: TYPE_LABELS_TH,
     fileKinds: FILE_KIND_SPECS,
     requiredFiles: REQUIRED_FILES,
     maxFileMb: getConfig_().MAX_FILE_MB

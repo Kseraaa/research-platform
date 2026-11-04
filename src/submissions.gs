@@ -112,11 +112,146 @@ function finalizeSubmission(submissionId, uploadKey) {
     });
     CacheService.getScriptCache().remove(uploadKeyCacheKey_(submission.submission_id));
 
-    // เฟส 3: ส่งอีเมล template "submitted" พร้อมลิงก์ติดตามสถานะ (track_token) ที่นี่
-
+    // ส่งอีเมลหลังบันทึกแล้ว ส่งไม่สำเร็จไม่ทำให้การส่งงานล้มเหลว (ดูได้ใน EMAIL_LOG)
     const presenter = findBy_('PRESENTERS', 'presenter_id', submission.presenter_id);
+    const submitted = Object.assign({}, submission, { status: STATUSES.SUBMITTED });
+    if (presenter) sendEmail_(presenter.email, 'submitted', submissionEmailData_(submitted, presenter), submission.submission_id);
     return { submissionId: submission.submission_id, email: presenter ? presenter.email : '' };
   });
+}
+
+// ---------- ติดตามสถานะ + ฉบับแก้ไข (ใช้ track_token จากลิงก์ในอีเมล) ----------
+
+/**
+ * ข้อมูลหน้าติดตามสถานะ ไม่คืน track_token / อีเมล / เบอร์โทร / ผู้เปลี่ยนสถานะ
+ * @return {{ submission_id, title, type, status, reviewer_note, submitted_at, authors, history: Object[], files: Object[], can_revise: boolean }}
+ */
+function getTrackingInfo(trackToken) {
+  return wrapApi_(() => {
+    const submission = requireTrackedSubmission_(trackToken);
+    const history = readAll_('STATUS_LOG')
+      .filter(l => l.submission_id === submission.submission_id)
+      .sort((a, b) => toTime_(a.changed_at) - toTime_(b.changed_at))
+      .map(l => ({ from_status: l.from_status, to_status: l.to_status, note: l.note, changed_at: l.changed_at }));
+    const files = readAll_('FILES')
+      .filter(f => f.submission_id === submission.submission_id && f.is_current)
+      .map(f => ({ file_kind: f.file_kind, file_name: f.file_name, version: f.version, size_kb: f.size_kb, uploaded_at: f.uploaded_at }));
+    return {
+      submission_id: submission.submission_id,
+      title: submission.title,
+      type: submission.type,
+      status: submission.status,
+      reviewer_note: submission.reviewer_note,
+      submitted_at: submission.submitted_at,
+      authors: submission.authors,
+      history: history,
+      files: files,
+      can_revise: submission.status === STATUSES.REVISION_REQUESTED
+    };
+  });
+}
+
+/**
+ * เริ่มส่งฉบับแก้ไข (สถานะต้องเป็น revision_requested) คืน uploadKey อายุ 1 ชม.
+ * @return {{ uploadKey: string }}
+ */
+function startRevision(trackToken) {
+  return wrapApi_(() => {
+    const submission = requireTrackedSubmission_(trackToken);
+    if (submission.status !== STATUSES.REVISION_REQUESTED) throw userError_('ขณะนี้ผลงานนี้ไม่ได้อยู่ในสถานะขอให้แก้ไข');
+    return { uploadKey: issueUploadKey_(submission.submission_id) };
+  });
+}
+
+/**
+ * อัปโหลดไฟล์ฉบับแก้ไขทีละไฟล์ เก็บเป็น version ใหม่ ไฟล์เดิมยังอยู่ (is_current = FALSE)
+ * ลำดับอาร์กิวเมนต์เหมือน uploadFile เพื่อใช้ uploadFilesInOrder ใน js_upload.html ร่วมกัน
+ */
+function uploadRevisionFile(trackToken, uploadKey, fileKind, name, mimeType, base64) {
+  return wrapApi_(() => {
+    const submission = requireRevisionWithKey_(trackToken, uploadKey);
+    const kind = cleanText_(fileKind, 40);
+    const checked = validateUploadedFile_(submission.type, kind, name, mimeType, base64, getConfig_().MAX_FILE_MB);
+    const saved = saveUploadedFile_(submission, kind, checked);
+    // จดว่ารอบแก้ไขนี้ (ผูกกับ uploadKey) อัปโหลดไฟล์ชนิดใดไปแล้ว ใช้ตรวจตอน submitRevision
+    const cache = CacheService.getScriptCache();
+    const key = revisionFilesCacheKey_(submission.submission_id, uploadKey);
+    const kinds = JSON.parse(cache.get(key) || '[]');
+    if (kinds.indexOf(kind) === -1) kinds.push(kind);
+    cache.put(key, JSON.stringify(kinds), LIMITS.UPLOAD_KEY_TTL_SEC);
+    return saved;
+  });
+}
+
+function revisionFilesCacheKey_(submissionId, uploadKey) {
+  return 'revision-files:' + submissionId + ':' + cleanText_(uploadKey, 60);
+}
+
+/**
+ * ส่งฉบับแก้ไข: ต้องมีไฟล์ใหม่อย่างน้อย 1 ไฟล์หลังถูกขอให้แก้ไข → resubmitted + STATUS_LOG + อีเมลผู้ส่งและแอดมิน
+ * @return {{ status: string }}
+ */
+function submitRevision(trackToken, uploadKey) {
+  return wrapApi_(() => {
+    const submission = requireRevisionWithKey_(trackToken, uploadKey);
+    const filesKey = revisionFilesCacheKey_(submission.submission_id, uploadKey);
+    const newFiles = JSON.parse(CacheService.getScriptCache().get(filesKey) || '[]');
+    if (!newFiles.length) throw userError_('กรุณาอัปโหลดไฟล์ฉบับแก้ไขอย่างน้อย 1 ไฟล์');
+
+    const now = nowIso_();
+    withLock_(() => {
+      const fresh = findBy_('SUBMISSIONS', 'submission_id', submission.submission_id);
+      if (!fresh || fresh.status !== STATUSES.REVISION_REQUESTED) throw userError_('ส่งฉบับแก้ไขไปแล้ว');
+      updateBy_('SUBMISSIONS', 'submission_id', submission.submission_id, { status: STATUSES.RESUBMITTED });
+      insert_('STATUS_LOG', {
+        log_id: newId_('LOG'),
+        submission_id: submission.submission_id,
+        from_status: STATUSES.REVISION_REQUESTED,
+        to_status: STATUSES.RESUBMITTED,
+        note: 'ส่งไฟล์ฉบับแก้ไข ' + newFiles.length + ' ไฟล์',
+        changed_by: 'presenter',
+        changed_at: now
+      });
+    });
+    CacheService.getScriptCache().remove(uploadKeyCacheKey_(submission.submission_id));
+    CacheService.getScriptCache().remove(filesKey);
+
+    const presenter = findBy_('PRESENTERS', 'presenter_id', submission.presenter_id);
+    const resubmitted = Object.assign({}, submission, { status: STATUSES.RESUBMITTED });
+    if (presenter) sendEmail_(presenter.email, 'status_changed', submissionEmailData_(resubmitted, presenter), submission.submission_id);
+    const adminEmail = getConfig_().ADMIN_NOTIFY_EMAIL;
+    if (adminEmail) {
+      const base = getWebAppUrl_();
+      sendEmail_(adminEmail, 'resubmitted_admin', {
+        submission_id: submission.submission_id,
+        title: submission.title,
+        type: submission.type,
+        presenter_name: presenter ? presenter.full_name : '',
+        link_url: base ? base + '?page=admin' : ''
+      }, submission.submission_id);
+    }
+    return { status: STATUSES.RESUBMITTED };
+  });
+}
+
+const TRACK_TOKEN_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** หางานจาก track_token (งาน draft ถือว่ายังไม่มี เพราะยังไม่ได้ส่งลิงก์ให้ใคร) */
+function requireTrackedSubmission_(trackToken) {
+  const token = cleanText_(trackToken, 60);
+  const notFound = 'ไม่พบผลงาน ลิงก์อาจไม่ถูกต้อง กรุณาเปิดจากลิงก์ในอีเมลอีกครั้ง';
+  if (!TRACK_TOKEN_PATTERN.test(token)) throw userError_(notFound);
+  const submission = findBy_('SUBMISSIONS', 'track_token', token);
+  if (!submission || submission.status === STATUSES.DRAFT) throw userError_(notFound);
+  return submission;
+}
+
+function requireRevisionWithKey_(trackToken, uploadKey) {
+  const submission = requireTrackedSubmission_(trackToken);
+  if (submission.status !== STATUSES.REVISION_REQUESTED) throw userError_('ขณะนี้ผลงานนี้ไม่ได้อยู่ในสถานะขอให้แก้ไข');
+  const stored = CacheService.getScriptCache().get(uploadKeyCacheKey_(submission.submission_id));
+  if (!stored || stored !== cleanText_(uploadKey, 60)) throw userError_('หมดเวลาการส่ง (เกิน 1 ชั่วโมง) กรุณารีเฟรชหน้าแล้วส่งใหม่');
+  return submission;
 }
 
 // ---------- ตรวจข้อมูล ----------

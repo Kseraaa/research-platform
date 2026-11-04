@@ -167,6 +167,42 @@ function pad2_(n) {
   return String(n).padStart(2, '0');
 }
 
+// ---------- ตัวช่วยรัน test ----------
+
+/**
+ * const t = createTestRunner_(); t.test('ชื่อ', () => {...}); return t.finish();
+ * finish() พิมพ์ผลลง log และ throw ถ้ามีข้อใดไม่ผ่าน
+ */
+function createTestRunner_() {
+  const results = [];
+  return {
+    test: (name, fn) => {
+      try {
+        fn();
+        results.push('ผ่าน  ' + name);
+      } catch (e) {
+        results.push('ไม่ผ่าน ' + name + ' → ' + (e && e.message));
+      }
+    },
+    /** fn ต้อง throw userError_ ที่ข้อความตรง pattern */
+    expectError: (fn, pattern) => {
+      try {
+        fn();
+      } catch (e) {
+        if (pattern && !pattern.test(e.userMessage || '')) throw new Error('error ไม่ตรง: ' + (e.userMessage || e.message));
+        return;
+      }
+      throw new Error('ควร error แต่ไม่ error');
+    },
+    finish: () => {
+      console.log(results.join('\n'));
+      const failed = results.filter(r => r.indexOf('ไม่ผ่าน') === 0).length;
+      if (failed) throw new Error('ไม่ผ่าน ' + failed + ' จาก ' + results.length + ' ข้อ');
+      return 'ผ่านทั้งหมด ' + results.length + ' ข้อ';
+    }
+  };
+}
+
 // ---------- test การส่งงาน (ไม่แตะ Drive/Sheets) ----------
 
 /**
@@ -174,24 +210,9 @@ function pad2_(n) {
  * ผลลัพธ์ดูใน Execution log ถ้ามีข้อใดไม่ผ่านจะ throw ตอนท้าย
  */
 function runSubmissionTests() {
-  const results = [];
-  const test = (name, fn) => {
-    try {
-      fn();
-      results.push('ผ่าน  ' + name);
-    } catch (e) {
-      results.push('ไม่ผ่าน ' + name + ' → ' + (e && e.message));
-    }
-  };
-  const expectError = (fn, pattern) => {
-    try {
-      fn();
-    } catch (e) {
-      if (pattern && !pattern.test(e.userMessage || '')) throw new Error('error ไม่ตรง: ' + (e.userMessage || e.message));
-      return;
-    }
-    throw new Error('ควร error แต่ไม่ error');
-  };
+  const runner = createTestRunner_();
+  const test = runner.test;
+  const expectError = runner.expectError;
   const pdf = Utilities.base64Encode('%PDF-1.4 ตัวอย่างไฟล์ PDF');
   const docx = Utilities.base64Encode([0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x06, 0x00]);
   const pdfMime = FILE_KIND_SPECS.paper_pdf.mime;
@@ -249,8 +270,70 @@ function runSubmissionTests() {
     if (at('2026-10-31T23:59:00+07:00') || !at('2026-11-15T12:00:00+07:00') || at('2026-12-01T00:00:00+07:00')) throw new Error('ช่วงเวลาไม่ถูก');
   });
 
-  console.log(results.join('\n'));
-  const failed = results.filter(r => r.indexOf('ไม่ผ่าน') === 0).length;
-  if (failed) throw new Error('ไม่ผ่าน ' + failed + ' จาก ' + results.length + ' ข้อ');
-  return 'ผ่านทั้งหมด ' + results.length + ' ข้อ';
+  return runner.finish();
+}
+
+// ---------- test อีเมล ----------
+
+/**
+ * รันใน editor: สร้างอีเมลทุก template (ไม่ส่งจริง) ตรวจ subject, escape HTML และลิงก์
+ */
+function runEmailTests() {
+  const t = createTestRunner_();
+  const evil = '<script>alert(1)</script> & "x"';
+  const base = { name: evil, submission_id: 'SUB-2026-0001', title: evil, type: 'oral', link_url: 'https://script.google.com/macros/s/X/exec?page=track&t=abc', link_label: 'ติดตามสถานะผลงาน' };
+
+  t.test('submitted: subject มีรหัสงาน และ escape ชื่อเรื่อง', () => {
+    const email = buildEmail_('submitted', Object.assign({ status: 'submitted' }, base));
+    if (email.subject.indexOf('SUB-2026-0001') === -1) throw new Error(email.subject);
+    if (email.html.indexOf('<script>') !== -1) throw new Error('มี <script> ใน HTML');
+    if (email.html.indexOf('&lt;script&gt;') === -1) throw new Error('ไม่ได้ escape');
+    if (email.html.indexOf('ติดตามสถานะผลงาน') === -1) throw new Error('ไม่มีปุ่มลิงก์');
+  });
+  t.test('status_changed: มีหมายเหตุและป้ายสถานะภาษาไทย', () => {
+    const email = buildEmail_('status_changed', Object.assign({ status: 'revision_requested', note: 'แก้บทคัดย่อ\nบรรทัด 2' }, base));
+    if (email.subject.indexOf('ขอให้แก้ไข') === -1) throw new Error(email.subject);
+    if (email.html.indexOf('แก้บทคัดย่อ<br>บรรทัด 2') === -1) throw new Error('หมายเหตุไม่แสดง');
+    if (email.text.indexOf('หมายเหตุจากผู้ตรวจ: แก้บทคัดย่อ') === -1) throw new Error('text ไม่มีหมายเหตุ');
+  });
+  t.test('resubmitted_admin: มีชื่อผู้ส่ง (escape)', () => {
+    const email = buildEmail_('resubmitted_admin', { submission_id: 'SUB-2026-0001', title: 'เรื่อง', type: 'poster', presenter_name: evil, link_url: '' });
+    if (email.html.indexOf('&lt;script&gt;') === -1 || email.html.indexOf('<script>') !== -1) throw new Error('ไม่ได้ escape ชื่อผู้ส่ง');
+  });
+  t.test('otp: มีรหัสและอายุรหัส', () => {
+    const email = buildEmail_('otp', { code: '123456', minutes: 10 });
+    if (email.subject.indexOf('123456') === -1 || email.html.indexOf('10 นาที') === -1) throw new Error('ไม่ครบ');
+  });
+  t.test('ลิงก์ที่ไม่ใช่ https ไม่สร้างปุ่ม', () => {
+    const email = buildEmail_('submitted', Object.assign({}, base, { status: 'submitted', link_url: 'javascript:alert(1)' }));
+    if (email.html.indexOf('javascript:') !== -1) throw new Error('มีลิงก์ javascript:');
+  });
+  t.test('template ที่ไม่รู้จัก throw', () => {
+    try { buildEmail_('nope', {}); } catch (e) { return; }
+    throw new Error('ควร throw');
+  });
+  return t.finish();
+}
+
+/**
+ * รันใน editor: ส่งอีเมลจริงทุก template ไปที่อีเมลของเจ้าของสคริปต์ เพื่อตรวจการตั้งค่า Resend
+ * ดูผลใน Execution log และแท็บ EMAIL_LOG (error ของ Resend จะบันทึกไว้ที่คอลัมน์ error)
+ */
+function sendTestEmail() {
+  assertEditorRun_();
+  const to = Session.getEffectiveUser().getEmail();
+  const sample = {
+    name: 'ผู้ทดสอบ', submission_id: 'SUB-TEST-0000', title: 'ตัวอย่างชื่อผลงานสำหรับทดสอบอีเมล', type: 'oral',
+    link_url: getWebAppUrl_() ? getWebAppUrl_() + '?page=home' : '', link_label: 'เปิดหน้าเว็บ'
+  };
+  const results = [
+    ['submitted', sendEmail_(to, 'submitted', Object.assign({ status: 'submitted' }, sample), '')],
+    ['status_changed', sendEmail_(to, 'status_changed', Object.assign({ status: 'revision_requested', note: 'ตัวอย่างหมายเหตุจากผู้ตรวจ' }, sample), '')],
+    ['resubmitted_admin', sendEmail_(to, 'resubmitted_admin', Object.assign({ presenter_name: 'ผู้ทดสอบ' }, sample), '')],
+    ['otp', sendEmail_(to, 'otp', { code: '123456', minutes: 10 }, '')]
+  ];
+  const message = results.map(r => (r[1] ? 'ส่งแล้ว  ' : 'ไม่สำเร็จ ') + r[0]).join('\n') + '\nผู้รับ: ' + to;
+  console.log(message);
+  if (results.some(r => !r[1])) throw new Error('ส่งไม่สำเร็จบางฉบับ ดูสาเหตุในแท็บ EMAIL_LOG คอลัมน์ error');
+  return message;
 }

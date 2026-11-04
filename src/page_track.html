@@ -1,1 +1,143 @@
-<!-- page_track.html: ติดตามสถานะ + ส่งฉบับแก้ไข (เฟส 3) -->
+<!-- page_track.html: ติดตามสถานะผลงาน (?page=track&t=<track_token>) + ส่งไฟล์ฉบับแก้ไขเมื่อสถานะ = revision_requested -->
+<script>
+  registerPage('track', {
+    render(container, params, isCurrent) {
+      container.innerHTML = renderPageHero({ title: 'ติดตามสถานะผลงาน', description: 'สถานะล่าสุด ประวัติ และหมายเหตุจากผู้ตรวจ' }) +
+        '<section class="container-content section"><div class="mx-auto flex max-w-3xl flex-col gap-6" data-track></div></section>';
+      const root = container.querySelector('[data-track]');
+      const token = String(params.t || '');
+
+      if (!token) {
+        root.innerHTML = renderEmptyState({
+          icon: 'link-2-off', title: 'ไม่พบลิงก์ติดตามสถานะ',
+          message: 'กรุณาเปิดจากลิงก์ในอีเมลที่ได้รับหลังส่งผลงาน', actionLabel: 'กลับหน้าหลัก', actionRoute: 'home'
+        });
+        return;
+      }
+
+      const typeLabel = type => (appConfig.typeLabels || {})[type] || type;
+      const fileLabel = kind => ((appConfig.fileKinds || {})[kind] || {}).label || kind;
+
+      function renderHistory(history) {
+        if (!history.length) return '<p class="text-meta">ยังไม่มีประวัติ</p>';
+        return '<ol class="timeline">' + history.map((h, i) =>
+          '<li class="timeline-item" data-state="' + (i === history.length - 1 ? 'current' : 'upcoming') + '"' + (i === history.length - 1 ? ' aria-current="step"' : '') + '>' +
+            '<span class="timeline-dot" aria-hidden="true"></span>' +
+            '<p class="text-meta">' + escapeHtml(formatThaiDate(h.changed_at, { withTime: true })) + '</p>' +
+            '<p class="mt-1">' + renderStatusBadge(h.to_status) + '</p>' +
+            (h.note ? '<p class="mt-1 text-meta">' + escapeHtml(h.note) + '</p>' : '') +
+          '</li>'
+        ).join('') + '</ol>';
+      }
+
+      function renderFiles(files) {
+        if (!files.length) return '<p class="text-meta">ไม่มีไฟล์</p>';
+        return '<ul class="flex flex-col divide-y divide-line">' + files.map(f =>
+          '<li class="flex items-start gap-3 py-3">' + icon('file-text', 'mt-0.5 text-navy-500') +
+            '<div class="min-w-0 flex-1">' +
+              '<p class="font-medium">' + escapeHtml(fileLabel(f.file_kind)) + '</p>' +
+              '<p class="text-meta [overflow-wrap:anywhere]">' + escapeHtml(f.file_name) + '</p>' +
+              '<p class="text-meta">ฉบับที่ ' + escapeHtml(f.version) + ' · ' + escapeHtml(formatFileSize(f.size_kb * 1024)) + ' · ' + escapeHtml(formatThaiDate(f.uploaded_at)) + '</p>' +
+            '</div></li>'
+        ).join('') + '</ul>';
+      }
+
+      function renderInfo(info) {
+        const isRevision = info.status === 'revision_requested';
+        root.innerHTML =
+          '<article class="card p-5 md:p-6">' +
+            '<p class="text-meta">รหัสงาน</p>' +
+            '<p class="font-heading text-2xl font-bold text-navy-700">' + escapeHtml(info.submission_id) + '</p>' +
+            '<h2 class="heading-3 mt-3 [overflow-wrap:anywhere]">' + escapeHtml(info.title) + '</h2>' +
+            '<p class="text-meta mt-1">' + escapeHtml(typeLabel(info.type)) + ' · ส่งเมื่อ ' + escapeHtml(formatThaiDate(info.submitted_at)) + '</p>' +
+            '<div class="mt-4 flex items-center gap-2"><span class="text-sm font-medium text-ink-muted">สถานะ</span>' + renderStatusBadge(info.status) + '</div>' +
+          '</article>' +
+          (info.reviewer_note ? renderAlert(isRevision ? 'warning' : 'info', info.reviewer_note, 'หมายเหตุจากผู้ตรวจ') : '') +
+          (info.can_revise ? '<section class="card p-5 md:p-6" data-track="revision"></section>' : '') +
+          '<section class="card p-5 md:p-6"><h2 class="heading-3">ประวัติสถานะ</h2><div class="mt-4">' + renderHistory(info.history) + '</div></section>' +
+          '<section class="card p-5 md:p-6"><h2 class="heading-3">ไฟล์ปัจจุบัน</h2><div class="mt-2">' + renderFiles(info.files) + '</div></section>';
+        if (info.can_revise) renderRevisionForm(info, root.querySelector('[data-track="revision"]'));
+        refreshIcons();
+      }
+
+      function renderRevisionForm(info, section) {
+        const kinds = (appConfig.requiredFiles || {})[info.type] || [];
+        const state = { uploadKey: null, done: {}, submitting: false };
+        const dropzones = {};
+        section.innerHTML =
+          '<h2 class="heading-3">ส่งไฟล์ฉบับแก้ไข</h2>' +
+          '<p class="text-meta mt-1">อัปโหลดเฉพาะไฟล์ที่แก้ไขอย่างน้อย 1 ไฟล์ ไฟล์ฉบับเดิมยังเก็บไว้ในระบบ</p>' +
+          '<div class="mt-4" data-rev="alert"></div>' +
+          '<div class="mt-2 flex flex-col gap-4" data-rev="files"></div>' +
+          '<button type="button" class="btn-primary mt-6 w-full sm:w-auto" data-rev="submit">ส่งฉบับแก้ไข</button>';
+        const alertBox = section.querySelector('[data-rev="alert"]');
+        const button = section.querySelector('[data-rev="submit"]');
+        const showAlert = (type, message, title) => { alertBox.innerHTML = type ? renderAlert(type, message, title) : ''; refreshIcons(); };
+
+        kinds.forEach(kind => {
+          dropzones[kind] = createDropzone({
+            fileKind: kind,
+            label: fileLabel(kind) + ' (ฉบับแก้ไข)',
+            onChange: () => { delete state.done[kind]; },
+            onRetry: () => submit()
+          });
+          section.querySelector('[data-rev="files"]').appendChild(dropzones[kind].element);
+        });
+
+        const warnBeforeLeave = event => { event.preventDefault(); event.returnValue = ''; };
+
+        function submit() {
+          if (state.submitting) return;
+          const items = kinds.filter(kind => dropzones[kind].getFile()).map(kind => ({ fileKind: kind, dropzone: dropzones[kind] }));
+          if (!items.length) {
+            showAlert('danger', 'กรุณาเลือกไฟล์ฉบับแก้ไขอย่างน้อย 1 ไฟล์');
+            return;
+          }
+          state.submitting = true;
+          setButtonLoading(button, true, 'กำลังส่ง...');
+          showAlert('info', 'กำลังอัปโหลดไฟล์ กรุณาอย่าปิดหน้านี้');
+          window.addEventListener('beforeunload', warnBeforeLeave);
+
+          const start = state.uploadKey ? Promise.resolve(state.uploadKey)
+            : callServer('startRevision', token).then(r => (state.uploadKey = r.uploadKey));
+          start
+            .then(uploadKey => uploadFilesInOrder({ submissionId: token, uploadKey: uploadKey, items: items, done: state.done, uploadFn: 'uploadRevisionFile' }))
+            .then(() => callServer('submitRevision', token, state.uploadKey))
+            .then(() => {
+              window.removeEventListener('beforeunload', warnBeforeLeave);
+              if (!isCurrent()) return;
+              toast('ส่งฉบับแก้ไขแล้ว เราจะแจ้งผลทางอีเมล', 'success');
+              load();
+            })
+            .catch(err => {
+              window.removeEventListener('beforeunload', warnBeforeLeave);
+              state.submitting = false;
+              if (!isCurrent()) return;
+              setButtonLoading(button, false);
+              showAlert('danger', err.message, 'ส่งไม่สำเร็จ');
+            });
+        }
+        button.addEventListener('click', submit);
+      }
+
+      const load = () => {
+        root.innerHTML = renderSkeleton('text', 8);
+        return callServer('getTrackingInfo', token).then(info => {
+          if (!isCurrent()) return;
+          renderInfo(info);
+        }).catch(err => {
+          if (!isCurrent()) return;
+          if (err.message.indexOf('ไม่พบผลงาน') === 0) {
+            root.innerHTML = renderEmptyState({ icon: 'link-2-off', title: 'ไม่พบผลงาน', message: err.message, actionLabel: 'กลับหน้าหลัก', actionRoute: 'home' });
+            refreshIcons();
+            return;
+          }
+          root.innerHTML = '';
+          root.appendChild(createErrorState(err.message, load));
+          refreshIcons();
+        });
+      };
+      return load();
+    }
+  });
+</script>
